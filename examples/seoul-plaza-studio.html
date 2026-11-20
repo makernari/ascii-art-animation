@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>서울광장, RUN | Prompt Animation</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#070b12;color:#e7eef5;font:13px/1.4 system-ui,sans-serif}main{width:min(100%,1000px);margin:auto;padding:12px;display:grid;gap:12px}.brand{padding:4px 1px 0;color:#91a7ba;display:flex;align-items:center;justify-content:space-between;gap:8px}.brand strong{color:#8fe5d2;font:600 13px ui-monospace,monospace;letter-spacing:.08em}.brand span{font:11px ui-monospace,monospace}.view{background:#0b1420;border:1px solid #253547;border-radius:11px;display:grid;justify-items:center;padding:0;overflow:hidden}.screen{width:100%;height:min(61svh,780px);min-height:215px;display:grid;place-items:center;background:#050b13}canvas{display:block;object-fit:contain;width:100%;height:100%;min-height:0;min-width:0;touch-action:manipulation}.commands{width:100%;display:flex;align-items:center;flex-wrap:wrap;justify-content:center;gap:6px;padding:8px 6px}button{background:#121f2e;color:#e7eef5;border:1px solid #304458;border-radius:6px;padding:4px 8px;font:500 12px system-ui,sans-serif;cursor:pointer;min-height:30px}button:hover{background:#20334a}button:disabled{opacity:.60;cursor:wait}button:focus-visible,input:focus-visible,canvas:focus-visible,textarea:focus-visible{outline:2px solid #e3b96f;outline-offset:-2px}button[aria-pressed=true],#apply{color:#8fe5d2;border-color:#397061}#video-scene,#video-code{color:#ffe7ac;border-color:#675536}input{width:clamp(50px,13vw,150px);accent-color:#e1ae5f}output{min-width:3.4em;text-align:center;font:11px ui-monospace,monospace}.code{border:1px solid #253547;border-radius:11px;overflow:hidden;background:#0e1927}.code-head{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:8px 10px;border-bottom:1px solid #253547}.code-head strong{margin-right:auto;font-size:12px;white-space:nowrap}.code textarea{display:block;width:100%;height:156px;resize:vertical;margin:0;border:0;border-radius:0;background:#091421;color:#b8e9db;padding:10px 12px;line-height:1.6;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;tab-size:2;white-space:pre;overflow:auto}.code textarea[readonly]{color:#bbd1e2}.note{margin:0;padding:6px 10px;color:#a2b8cc;font-size:11px;min-height:18px}.view .note:empty{display:none}.clean main{width:100%;margin:0;padding:0}.clean .brand,.clean .commands,.clean .code,.clean .note{display:none}.clean .view{border:0;border-radius:0}.clean .screen{height:100svh}.clean body{overflow:hidden}@media(max-width:480px){main{padding:6px;gap:7px}.screen{height:54svh}.commands{gap:4px}.code textarea{height:110px}.code-head{padding:5px}.code-head button{padding:3px 5px}.brand{padding-top:0}}
+[hidden]{display:none!important}.modes{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;padding:7px 4px 0}.modes button{min-height:28px}.mode-caption{margin:4px 8px 1px;font-size:11px;color:#a2b8cc;text-align:center}.scroll-mode #scroll-area{height:calc(100svh + 680px)}.scroll-mode #scene-view{position:sticky;top:5px}.scroll-mode .screen{height:min(53svh,640px)}.clean .modes,.clean .mode-caption{display:none}.clean #scroll-area{height:auto}.clean #scene-view{position:static}</style>
+</head>
+<body><main><header class="brand"><strong>Prompt / Animation</strong><span>LOCAL SCENE STUDIO</span></header><div id="scroll-area"><section class="view" id="scene-view" aria-label="실행 화면"><nav class="modes" aria-label="감상 모드"><button type="button" data-playmode="auto" aria-pressed="true">자동 재생</button><button type="button" data-playmode="still" aria-pressed="false">정지 감상</button><button type="button" data-playmode="action" aria-pressed="false">클릭 반응</button><button type="button" data-playmode="scroll" aria-pressed="false">스크롤</button><button type="button" id="perform-action" hidden>장면 실행</button></nav><p class="mode-caption" id="mode-hint">열면 자동으로 재생합니다.</p><div class="screen">
+<canvas id="stage" width="1080" height="1920" tabindex="0" aria-label="장면 미리보기. Enter 시작, Space 재생 또는 일시 정지, R 초기화, H 컨트롤 숨기기, S PNG 저장"></canvas></div>
+<div class="commands" aria-label="재생 및 촬영 제어">
+<button id="play" type="button" title="Enter 또는 Space">시작</button>
+<button id="reset" type="button" title="R">초기화</button>
+<input id="scrub" type="range" aria-label="시간 위치" min="0" max="12" value="0" step="0.05"><output id="clock" for="scrub">0.0초</output>
+<button id="still" type="button" title="S">PNG</button>
+<button id="capture" type="button" title="H로 다시 표시">촬영 모드</button>
+<button id="video-scene" type="button">영상 저장 · 장면</button>
+<button id="video-code" type="button">영상 저장 · 장면+코드</button>
+</div><p id="video-status" class="note" role="status" aria-live="polite"></p></section></div>
+<section class="code" aria-label="코드 작성 화면"><div class="code-head"><strong>장면 코드</strong><button type="button" id="settings-tab" aria-pressed="true">설정 편집</button><button type="button" id="source-tab" aria-pressed="false">렌더링 소스</button><button type="button" id="apply">적용</button><button type="button" id="undo">기본값</button></div><textarea id="editor" wrap="off" spellcheck="false" aria-label="장면 코드 편집 및 소스 보기"></textarea><p id="editor-note" class="note" role="status">장면 설정(JSON). 숫자나 색을 바꾸고 ‘적용’을 누르세요.</p></section>
+</main>
+<script>
+'use strict';
+// SCENE CONFIG START
+const SCENE = { title:'서울광장, RUN | Prompt Animation', filename:'seoul-plaza-run', width:900, height:1600, duration:12, loop:false, controls:{zoom:1,motion:1,snow:1,ignition:0,tint:'#ffc570',tintStrength:0}, actionLabel:'트리 점등', hitbox:[155,285,755,1100] };
+// SCENE CONFIG END
+const stage = document.querySelector('#stage'), ctx = stage.getContext('2d');
+const play = document.querySelector('#play'), seek = document.querySelector('#scrub'), clock = document.querySelector('#clock');
+const clamp = (x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const mix = (a,b,t)=>a+(b-a)*t;
+const ease = (a,b,t)=>{const x=clamp((t-a)/(b-a));return x*x*(3-2*x)};
+const TAU = Math.PI*2;
+function seeded(seed){return ()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296}}
+// SCENE CODE START
+const W=900,H=1600, cx=452, tip=330, foot=1080;
+const rng=seeded(2391);
+const gold=['#ffc570','#ffe4a4','#fff1c6','#f2aa53'];
+const pine=['#0a3140','#15505a','#257369','#4c9787','#295c61'];
+const R=(a,b)=>mix(a,b,rng());
+const stars=Array.from({length:125},()=>[R(0,W),R(55,798),R(.25,1.5),R(.12,.65),R(0,6)]);
+const snow=Array.from({length:198},(_,i)=>[R(-75,975),R(0,H),R(30,165),R(.4,i<160?2.2:4.4),R(0,TAU),R(.24,.89)]);
+const trees=Array.from({length:20},(_,i)=>[i*51+R(-15,15),R(953,1035),R(28,93)]);
+const ground=Array.from({length:900},()=>[R(-30,930),R(1045,1615),R(.35,1.7),R(.04,.22)]);
+const lights=Array.from({length:590},()=>{const p=R(.035,.975), f=R(-1,1); return [p,f,R(0,TAU),R(.65,2.15),rng()>.89?'#e57977':rng()>.86?'#81d9d2':gold[Math.floor(rng()*gold.length)]]});
+const foliage=Array.from({length:2300},()=>[R(.005,.985),R(-1,1),R(.8,9),Math.floor(rng()*5),R(.24,.93)]);
+const drift=Array.from({length:64},()=>[R(-1,1),R(0,TAU),R(.5,2.6),R(.4,1)]);
+function rgba(r,g,b,a){return `rgba(${r},${g},${b},${clamp(a)})`}
+function box(g,x,y,w,h,color){g.fillStyle=color;g.fillRect(x,y,w,h)}
+function dot(g,x,y,r,color){g.fillStyle=color;g.beginPath();g.arc(x,y,r,0,TAU);g.fill()}
+function wire(g,points,color,width=1){g.beginPath();g.moveTo(...points[0]);for(let j=1;j<points.length;j++)g.lineTo(...points[j]);g.lineWidth=width;g.strokeStyle=color;g.stroke()}
+function poly(g,points,color,edge,width=1){g.beginPath();g.moveTo(...points[0]);for(let j=1;j<points.length;j++)g.lineTo(...points[j]);g.closePath();g.fillStyle=color;g.fill();if(edge){g.strokeStyle=edge;g.lineWidth=width;g.stroke()}}
+function glow(g,x,y,r,rgb,a){const grad=g.createRadialGradient(x,y,0,x,y,r);grad.addColorStop(0,rgba(...rgb,a));grad.addColorStop(.3,rgba(...rgb,a*.56));grad.addColorStop(1,rgba(...rgb,0));g.fillStyle=grad;g.fillRect(x-r,y-r,r*2,r*2)}
+function type(g,s,x,y,{font='700 18px ui-monospace, monospace',ink='#eee6ce',align='left',tracking=0}={}){g.font=font;g.fillStyle=ink;g.textAlign=align;g.letterSpacing=tracking+'px';g.fillText(s,x,y);g.letterSpacing='0px'}
+function treeWidth(p){return (3+285*Math.pow(p,.83))*(1+.077*Math.sin(p*TAU*8-.5)+.022*Math.sin(p*TAU*23))}
+function treeCenter(p,t){return cx+7*Math.sin(p*9)*p+Math.sin(t*.8+p*8)*p*2}
+function cross(g,x,y,r,col,w=1){wire(g,[[x-r,y],[x+r,y]],col,w);wire(g,[[x,y-r],[x,y+r]],col,w)}
+function dataFrame(){const c=document.createElement('canvas');c.width=W;c.height=H;return c}
+const cityLayer=dataFrame();
+function makeSkyline(g){
+  const wave=[[302,851],[361,767],[424,723],[506,676],[615,654],[729,655],[824,679],[893,723],[957,777]];
+  poly(g,[[286,1041],...wave,[957,1040]],'#103144','#396278',2);
+  g.save();g.clip();
+  for(let y=675;y<1044;y+=19)wire(g,[[285,y],[982,y-68]],'#41687d',.8);
+  for(let x=303;x<990;x+=31)wire(g,[[x-70,1000],[x+12,676]],'#3a657c',1.1);
+  for(let x=521;x<920;x+=35)for(let i=0;i<8;i++){const y=745+i*25-((x-521)/35)*2;if(Math.sin(x*i*.44)>.23)box(g,x,y,12,2,'#597989')}
+  g.restore();
+  const buildings=[[0,775,112,279],[103,831,84,224],[183,754,119,301],[297,887,78,168],[750,800,98,235],[827,748,100,310]];
+  for(const [x,y,w,h] of buildings){
+    box(g,x,y,w,h,'#0a2033');wire(g,[[x,y+h],[x,y],[x+w,y],[x+w,y+h]],'#35576a',1.5);
+    wire(g,[[x-2,y-4],[x+w+2,y-4]],'#597184',2);
+    for(let xx=x+10;xx<x+w-5;xx+=15)for(let yy=y+19;yy<y+h-24;yy+=20){box(g,xx,yy,7,8,Math.sin(xx*97+yy*9)>.72?'#646652':'#153348');}
+  }
+  for(const [x,y,h] of trees){wire(g,[[x,y],[x,y-h]],'#172d3d',3);for(let k=1;k<5;k++){const j=y-h*k/6;wire(g,[[x-h*.19,j-h*.17],[x,j],[x+h*.23,j-h*.19]],'#294252',1.1)}}
+  const wall='#213f4a', masonry='#4c6569', trim='#a5b2a3';
+  box(g,65,916,779,132,wall);
+  poly(g,[[46,931],[99,865],[291,865],[315,905],[602,905],[632,865],[804,865],[858,931]],'#19343e',trim,2.1);
+  for(const [a,b,y] of [[79,830,937],[77,830,971],[70,837,1017],[65,844,1047]])wire(g,[[a,y],[b,y]],masonry,3);
+  for(const x of [72,280,294,614,628,829]){box(g,x,926,9,118,'#395660');wire(g,[[x+1,928],[x+1,1044]],trim,1)}
+  for(let x=95;x<820;x+=44)for(const y of [950,985,1025]){
+    box(g,x,y,15,18,'#142b38');g.strokeStyle=masonry;g.lineWidth=1;g.strokeRect(x,y,15,18);
+    if((x+y)%5>1){box(g,x+3,y+3,9,12,'#6d7563');wire(g,[[x+8,y+2],[x+8,y+16]],'#273c42',1)}
+  }
+  poly(g,[[341,1048],[341,888],[383,849],[411,849],[411,804],[452,777],[494,804],[494,847],[520,847],[564,885],[564,1048]],'#243e45','#8a9c94',2);
+  for(const y of [882,901,914,953,1005,1047])wire(g,[[347,y],[559,y]],'#68827e',2);
+  for(const x of [367,397,428,459,491,522]){box(g,x,928,17,65,'#334c50');wire(g,[[x,993],[x,932],[x+9,921],[x+17,932],[x+17,993]],'#7a8e84',2)}
+  dot(g,452,831,15,'#a0aa98');dot(g,452,831,12,'#273d46');wire(g,[[452,822],[452,831],[458,834]],'#c5b485',1.7);
+  for(let x=105;x<819;x+=19)wire(g,[[x,860],[x+19,864]],'#9caa9e',1.4);
+  for(let i=0;i<ground.length;i++){const [x,y,r,a]=ground[i];box(g,x,y,r*(1+(y-1045)/290),r,rgba(143,181,204,a))}
+}
+makeSkyline(cityLayer.getContext('2d'));
+function drawSky(g,t,lit){
+  const sky=g.createLinearGradient(0,-50,0,H);
+  sky.addColorStop(0,'#06101c');sky.addColorStop(.28,'#102634');sky.addColorStop(.51,lit>.4?'#2a3e4c':'#203947');sky.addColorStop(.72,'#193747');sky.addColorStop(1,'#06141e');
+  box(g,0,0,W,H,sky);
+  glow(g,692,454,368,[84,144,160],.22);glow(g,412,907,488,[155,158,121],.08+.16*lit);
+  for(const [x,y,r,a,ph] of stars){dot(g,x,y,r,rgba(180,208,214,a*(.82+.18*Math.sin(t+ph))))}
+  const mx=714,my=372;glow(g,mx,my,118,[199,223,208],.09);dot(g,mx,my,33,'#cfdfd1');dot(g,mx+11,my-8,31,'#19303e');
+  for(let k=0;k<3;k++){g.beginPath();g.moveTo(-90,610+k*60);g.bezierCurveTo(191,510+k*58,588,791+k*12,1010,598+k*36);g.lineWidth=23+k*13;g.strokeStyle=rgba(115,171,181,.027);g.stroke()}
+}
+function drawSquare(g,t,lit){
+  const gnd=g.createLinearGradient(0,1015,0,1600);
+  gnd.addColorStop(0,'#1d3844');gnd.addColorStop(.24,'#1a3441');gnd.addColorStop(1,'#081923'); box(g,0,1037,W,590,gnd);
+  const persp=[-1360,-900,-560,-260,27,240,455,676,909,1246,1550,1840];
+  for(const x of persp)wire(g,[[451+(x-451)*.12,1037],[x,1606]],rgba(126,165,178,.19),1.1);
+  for(const y of [1063,1089,1123,1168,1228,1308,1416,1555])wire(g,[[0,y],[W,y+1]],rgba(128,163,174,.23),1.3);
+  g.drawImage(cityLayer,0,0);
+  if(lit>.012){
+    g.save();g.translate(cx,1092);g.scale(1.66,.49);glow(g,0,264,350,[229,169,83],.29*lit);g.restore();
+    for(let i=0;i<171;i++){const [x0,y0,r]=ground[i];const delta=(x0-W/2), y=y0+21;if(Math.abs(delta)>83+(y-1060)*.36||y>1508)continue;const wav=.62+.38*Math.sin(t*2.1+i*.61);const x=cx+delta*.88+Math.sin(t*1.35+i*.3)*7;box(g,x,y,r*(7+(y-1060)*.046),r*.8,rgba(255,186+i%42,101,lit*wav*(1-(y-1060)/570)*.63));}
+  }
+  for(const [x,y,scale] of [[143,1083,1],[756,1059,.79],[228,1035,.52],[662,1032,.51]]){
+    const top=y-149*scale;
+    wire(g,[[x,y],[x,top+10]],'#203941',5*scale);wire(g,[[x-1.5,y-3],[x-1.5,top+13]],'#9b9c7d',1.2*scale);
+    poly(g,[[x-13*scale,top],[x+13*scale,top],[x+8*scale,top+18*scale],[x-8*scale,top+18*scale]],'#a48354','#a5a07c',scale);
+    box(g,x-5*scale,top+3*scale,10*scale,11*scale,'#ffe2a0');glow(g,x,top+9*scale,63*scale,[255,195,105],.27);
+  }
+}
+function drawTree(g,t,lit,asc){
+  const footFade=ease(.05,1.4,t), bottom=foot-tip;
+  box(g,cx-14,1023,33,68,'#12313b');
+  g.beginPath();g.moveTo(treeCenter(0,t),tip);
+  for(let i=1;i<=150;i++){const p=i/150;g.lineTo(treeCenter(p,t)-treeWidth(p),tip+bottom*p)}
+  for(let i=150;i>=0;i--){const p=i/150;g.lineTo(treeCenter(p,t)+treeWidth(p),tip+bottom*p)}
+  g.closePath();
+  const greenery=g.createLinearGradient(175,610,712,876);greenery.addColorStop(0,'#103842');greenery.addColorStop(.53,'#153b46');greenery.addColorStop(1,'#071f2a');
+  g.fillStyle=greenery;g.fill();g.strokeStyle='#386c69';g.lineWidth=1.7;g.stroke();
+  g.save();g.clip();
+  if(lit>.005)glow(g,427,773,471,[48,143,111],.25*lit);
+  for(const [p,f,len,col,op] of foliage){const x=treeCenter(p,t)+f*treeWidth(p),y=tip+p*bottom;g.globalAlpha=op*(.59+lit*.41);g.fillStyle=pine[col];g.fillRect(x,y,len*(.48+p*.65),.8+p*1.4);}
+  g.globalAlpha=1;
+  for(let i=0;i<22;i++){const p=.08+i*.041, x=treeCenter(p,t), y=tip+bottom*p, w=treeWidth(p);g.beginPath();g.moveTo(x-w*.97,y-10);g.quadraticCurveTo(x-w*.33,y+9,x,y-15);g.quadraticCurveTo(x+w*.46,y+8,x+w*.96,y-3);g.strokeStyle=rgba(136,171,146,.12+lit*.12);g.lineWidth=1.1;g.stroke();}
+  g.restore();
+  for(let coil=0;coil<5;coil++)for(let k=0;k<66;k++){
+    const a=k/65, p=.13+(coil+a)*.163, x=treeCenter(p,t)+treeWidth(p)*(-.95+1.9*a), y=tip+bottom*p+Math.sin(a*Math.PI)*(17+coil*4);
+    const ignition=ease(1-p,1-p+.19,asc), q=ignition*(.76+.24*Math.sin(t*3-a*8+coil*1.7));
+    if(q>.02){dot(g,x,y,.8+p*1.45,rgba(255,192+coil*8,108,q));if(k%11===0)glow(g,x,y,13+p*9,[255,177,83],q*.19)}
+  }
+  for(const [p,f,ph,r,color] of lights){
+    const x=treeCenter(p,t)+f*treeWidth(p), y=tip+bottom*p;
+    const q=ease(1-p,1-p+.24,asc);
+    if(q<.01){if(r>1.85)dot(g,x,y,.7,rgba(159,184,149,.22+footFade*.12));continue}
+    const tw=.74+.26*Math.sin(ph+t*(1.2+p*.85));
+    g.globalAlpha=(.36+q*.64)*tw;dot(g,x,y,r*(.7+p*.88),color);
+    if(r>2.04&&q>.5&&f>.21)cross(g,x,y,r*2.75,color,.7);
+  }
+  g.globalAlpha=1;
+  for(let i=0;i<17;i++){
+    const f=lights[i*29],p=.25+f[0]*.67,x=treeCenter(p,t)+f[1]*treeWidth(p)*.91,y=tip+bottom*p;
+    const q=ease(1-p,1-p+.24,asc); if(q<.1)continue;
+    const colors=i%3===0?['#a04d59','#e9a090']:i%3===1?['#92805a','#ffdba4']:['#347a7b','#9fccc4'];
+    g.globalAlpha=q;dot(g,x,y,4.5+p*4.5,colors[0]);dot(g,x-1.6,y-2.2,1.4,colors[1]);cross(g,x,y,3.8,colors[1],.7);
+  }
+  g.globalAlpha=1;
+  const s=ease(5.2,6.18,t), swell=Math.sin(Math.PI*ease(5.48,6.66,t));
+  if(s>.01){
+    glow(g,cx,310,100+40*swell,[255,189,98],.4*s);glow(g,cx,310,39,[255,219,149],.84*s);
+    for(let i=0;i<48;i++){const [d,ph,r,a]=drift[i], angle=ph+t*.12, radial=34+a*(40+swell*91),x=cx+Math.cos(angle)*radial,y=310+Math.sin(angle)*radial*.8;dot(g,x,y,r*.72,rgba(255,213,135,s*(.38+swell*.42)*(.67+.33*Math.sin(d*21+t*5))))}
+    wire(g,[[cx-57-swell*65,310],[cx+57+swell*65,310]],rgba(255,207,126,s*(.41+.36*swell)),1.3);
+    wire(g,[[cx,266-swell*47],[cx,357+swell*42]],rgba(255,207,126,s*(.45+.3*swell)),1.4);
+  }
+  const shape=[];for(let i=0;i<16;i++){const a=-Math.PI/2+i*Math.PI/8, r=i%2?9:i%4===0?31:19;shape.push([cx+Math.cos(a)*r,310+Math.sin(a)*r]);}
+  poly(g,shape,s>.6?'#fff1c4':'#35545a',s>.6?'#ffe1a2':'#839795',1.4);
+}
+function drawPeople(g,t){
+  for(const [i,x0,y,s,v] of [[0,37,1160,1.05,11],[1,128,1142,.82,10],[2,815,1159,.93,-11],[3,763,1138,.73,-10],[4,235,1100,.54,8],[5,689,1098,.62,-9]]){
+    const phase=t*3+i, x=x0+t*v; const ink=i===1?'#382c3c':'#101f2a'; const gait=Math.sin(phase)*8*s;
+    g.save();g.translate(x,y);g.scale(s,s);
+    wire(g,[[-12,3],[10,2]],rgba(6,14,22,.36),5);
+    wire(g,[[0,-19],[-6+gait*.45,-1]],ink,5);wire(g,[[4,-19],[8-gait*.45,-1]],ink,5);
+    poly(g,[[-6,-46],[7,-47],[13,-22],[-12,-20]],ink,'#45545a',.8);
+    dot(g,.5,-52,6.1,ink);wire(g,[[-5,-44],[8,-43]],i===1?'#9b575b':'#647477',1.8);
+    wire(g,[[-5,-43],[-12-gait*.36,-27]],ink,4);wire(g,[[7,-42],[12+gait*.34,-26]],ink,4);g.restore();
+  }
+}
+function snowfall(g,t,near,intensity=1){
+  if(intensity<=0)return;
+  for(let i=near?159:0;i<(near?snow.length:159);i++){
+    const [x,y,v,r,p,opacity]=snow[i], a=opacity*intensity, sy=(y+t*v*(near?.77:.53))%(H+50)-25;
+    const sx=((x+35+t*v*.135+Math.sin(t*.68+p+sy*.001)*18+1024)%1024)-50;
+    if(near&&r>2.7){glow(g,sx,sy,r*3.5,[201,224,231],a*.21)}
+    if(near&&i%6===0)wire(g,[[sx-2,sy-r*2],[sx,sy]],rgba(218,232,235,a*.38),r*.72);
+    dot(g,sx,sy,r,rgba(219,235,233,near?a*.7:a*.73));
+  }
+}
+function titleCard(g,t,lit){
+  const shade=g.createLinearGradient(0,72,0,420);shade.addColorStop(0,'rgba(5,14,23,.92)');shade.addColorStop(1,'rgba(5,14,23,0)');box(g,0,0,W,420,shade);
+  const lower=g.createLinearGradient(0,1220,0,1570);lower.addColorStop(0,'rgba(5,13,22,0)');lower.addColorStop(1,'rgba(5,13,22,.81)');box(g,0,1220,W,380,lower);
+  wire(g,[[64,121],[101,121]],'#d3a45e',2);
+  type(g,'SEOUL  /  WINTER 2026',116,127,{font:'600 17px ui-monospace, monospace',ink:'#e0be86',tracking:3});
+  type(g,'서울광장',61,224,{font:'800 83px system-ui, sans-serif',ink:'#f5eddb',tracking:-3});
+  type(g,'성탄트리 점등식',66,279,{font:'600 29px system-ui, sans-serif',ink:'#bac8c3',tracking:2});
+  const yy=1376;
+  wire(g,[[66,yy],[834,yy]],'#58676a',1);
+  const status=t<.08?'Ok  /  RUN_': t<5.35?'조명이 올라갑니다':t<9.8?'광장이 환해지는 순간':'MERRY CHRISTMAS';
+  type(g,status,66,1429,{font:'600 25px system-ui, sans-serif',ink:lit>.55?'#ffe3ae':'#c7dad4',tracking:2});
+  type(g,'01  /  겨울의 서울',66,1474,{font:'500 17px system-ui, sans-serif',ink:'#8fa4aa',tracking:3});
+  type(g,'37°33′ N',834,1474,{font:'500 16px ui-monospace, monospace',ink:'#aabbbc',align:'right',tracking:2});
+  wire(g,[[68,1502],[832,1502]],'#334853',1);
+  wire(g,[[68,1502],[68+764*(clamp(t/12)),1502]],'#dbaa5d',2);
+}
+function drawScene(g,t,o={}){
+  const ignition=o.ignition||0;
+  const ascend=ease(1.05,5.5,t-ignition)*1.25, lit=ease(2.1,5.8,t-ignition), push=ease(.24,7.75,t);
+  g.save();drawSky(g,t,lit);snowfall(g,t,false,o.snow);
+  g.save();g.translate(cx,801);g.scale(1+.065*push,1+.065*push);g.translate(-cx+13*push,-801+11*push);
+  drawSquare(g,t,lit);drawTree(g,Math.max(0,t-ignition),lit,ascend);drawPeople(g,t);g.restore();
+  snowfall(g,t,true,o.snow);titleCard(g,t,lit);g.restore();
+}
+// SCENE CODE END
+const params=new URLSearchParams(location.search);
+const reduced=window.matchMedia('(prefers-reduced-motion: reduce)');
+const auto=!reduced.matches&&(params.has('autoplay')?params.get('autoplay')!=='0':!params.has('t'));
+const looping=params.has('loop')?params.get('loop')==='1':SCENE.loop;
+const initialT=params.has('t')&&Number.isFinite(+params.get('t'))?clamp(+params.get('t'),0,SCENE.duration):0;
+let time=initialT, playing=false, origin=0, request=0, clean=params.get('clean')==='1';
+stage.width=1080;stage.height=Math.round(1080*SCENE.height/SCENE.width);
+stage.style.aspectRatio=`${SCENE.width}/${SCENE.height}`;
+document.title=SCENE.title; seek.max=SCENE.duration;
+function paint(){renderFilm(ctx,time);seek.value=time;clock.value=time.toFixed(1)+'초';play.textContent=playing?'일시 정지':time>=SCENE.duration?'다시 재생':time===0?'시작':'재생'}
+function tick(now){const elapsed=(now-origin)/1000;if(elapsed>=SCENE.duration&&!looping){time=SCENE.duration;playing=false;request=0;paint();return}time=looping?elapsed%SCENE.duration:elapsed;paint();request=requestAnimationFrame(tick)}
+function stop(){if(request)cancelAnimationFrame(request);request=0;playing=false;paint()}
+function start(){if(playing)return;if(time>=SCENE.duration)time=0;playing=true;origin=performance.now()-time*1000;paint();request=requestAnimationFrame(tick)}
+function toggle(){playing?stop():start()}
+function setClean(value){clean=value;document.body.classList.toggle('clean',clean);document.querySelector('#capture').setAttribute('aria-pressed',String(clean));if(clean)stage.focus({preventScroll:true});fit()}
+function saveStill(){
+  stage.toBlob(blob=>{
+    if(!blob||!blob.size){window.alert('PNG를 저장하지 못했습니다.');return}
+    const url=URL.createObjectURL(blob), a=document.createElement('a');
+    a.href=url;a.download=`${SCENE.filename||"prompt-animation"}-${Math.round(time*1000)}.png`;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);
+  },'image/png');
+}
+document.querySelector('#still').addEventListener('click',saveStill);
+function setTime(t){time=clamp(t,0,SCENE.duration);stop()}
+function fit(){}
+play.addEventListener('click',toggle);document.querySelector('#reset').addEventListener('click',resetByMode);document.querySelector('#capture').addEventListener('click',()=>setClean(!clean));seek.addEventListener('input',()=>setTime(+seek.value));stage.addEventListener('click',stageAction);
+
+window.addEventListener('keydown',e=>{if(e.repeat||e.metaKey||e.ctrlKey||e.altKey||e.target.tagName==='TEXTAREA'||e.target.isContentEditable)return;const k=e.key.toLowerCase();if(k==='s'&&e.target!==seek){e.preventDefault();saveStill()}else if(k==='h'){e.preventDefault();setClean(!clean)}else if(k==='r'&&e.target!==seek){e.preventDefault();resetByMode()}else if((k==='enter'||k===' ')&&!['BUTTON','INPUT'].includes(e.target.tagName)){e.preventDefault();if(sceneMode==='action')kick();else if(sceneMode==='auto')toggle()}else if((k==='arrowleft'||k==='arrowright')&&e.target===stage){e.preventDefault();setTime(time+(k==='arrowleft'?-.1:.1))}});
+reduced.addEventListener('change',()=>{if(reduced.matches&&playing)stop()});
+Object.defineProperty(window,'scenePlayback',{value:{seek:setTime, get time(){return time}, get playing(){return playing}, get duration(){return SCENE.duration}},writable:false});
+/**
+ * Bind a real-time, silent 30 fps canvas export to a button.
+ * render(ctx, t) must draw a complete frame synchronously, using only t
+ * (seconds), not the preview's canvas, clock, or playback position.
+ * Returns an unbind function; calling it also cancels an active export.
+ */
+function bindVideoExport({ button, status, width, height, duration, render, filename, onBegin, onEnd }) {
+  if (!button || typeof button.addEventListener !== "function" || !status || !("textContent" in status)) {
+    throw new TypeError("button과 status 요소가 필요합니다.");
+  }
+  if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0 ||
+      !Number.isFinite(duration) || duration <= 0 || typeof render !== "function" ||
+      typeof filename !== "string" || !filename.trim() || /[\\/\x00-\x1f\x7f]/.test(filename) ||
+      (onBegin != null && typeof onBegin !== "function") || (onEnd != null && typeof onEnd !== "function")) {
+    throw new TypeError("크기, 재생 시간, render, 안전한 파일 이름과 훅을 확인해 주세요.");
+  }
+
+  const fps = 30;
+  const frameMs = 1000 / fps;
+  const base = filename.trim().replace(/\.(?:mp4|webm)$/i, "");
+  if (!base || /^\.+$/.test(base)) throw new TypeError("안전한 파일 이름이 필요합니다.");
+  let disposed = false;
+  let active = null;
+  const downloads = new Set();
+
+  async function start(event) {
+    event.preventDefault();
+    if (disposed || active) return;
+    const job = { cancel: null, cancelled: false };
+    active = job;
+    const oldDisabled = button.disabled;
+    const oldBusy = button.getAttribute("aria-busy");
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    status.textContent = "내보내기 준비 중… 완료될 때까지 이 탭을 열어 두고 다른 탭으로 이동하거나 창을 최소화하지 마세요.";
+
+    let canvas, stream, recorder, raf = 0, watchdog = 0, stopTimer = 0;
+    let hookStarted = false, error = null, result = null;
+    let rejectRecording = null;
+    const chunks = [];
+    const message = value => value instanceof Error ? value.message : String(value);
+    const fail = reason => {
+      if (!error) error = reason instanceof Error ? reason : new Error(String(reason));
+      if (rejectRecording) rejectRecording(error);
+    };
+    job.cancel = reason => {
+      job.cancelled = true;
+      fail(new Error(reason || "내보내기를 취소했습니다."));
+    };
+    const checkVisible = () => {
+      if (document.visibilityState !== "visible") {
+        job.cancel("탭이 숨겨져 내보내기를 중단했습니다. 이 탭을 계속 열어 둔 상태에서 다시 시도해 주세요.");
+      }
+    };
+    const checkCancelled = () => { if (error || job.cancelled || disposed) throw error || new Error("내보내기를 취소했습니다."); };
+    const draw = t => {
+      const value = render(canvas.getContext("2d"), t);
+      if (value && typeof value.then === "function") {
+        // Consume a rejected promise without letting it escape this synchronous API.
+        Promise.resolve(value).catch(() => {});
+        throw new Error("render는 비동기 함수가 아닌 동기 함수여야 합니다.");
+      }
+    };
+
+    document.addEventListener("visibilitychange", checkVisible);
+    try {
+      checkVisible();
+      checkCancelled();
+      if (typeof MediaRecorder === "undefined" || typeof HTMLCanvasElement.prototype.captureStream !== "function") {
+        throw new Error("이 브라우저는 동영상 내보내기를 지원하지 않습니다.");
+      }
+      if (onBegin) { hookStarted = true; await onBegin(); }
+      checkCancelled();
+      checkVisible();
+      checkCancelled();
+      canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      if (!canvas.getContext("2d")) throw new Error("내보내기용 캔버스를 만들 수 없습니다.");
+      draw(0);
+      // A private canvas: no preview controls, status UI, or audio tracks are captured.
+      stream = canvas.captureStream(0);
+      let track = stream.getVideoTracks()[0];
+      if (!track) throw new Error("캔버스 영상 트랙을 만들 수 없습니다.");
+      const manualFrames = typeof track.requestFrame === "function";
+      if (!manualFrames) {
+        stream.getTracks().forEach(item => item.stop());
+        stream = canvas.captureStream(fps);
+        track = stream.getVideoTracks()[0];
+        if (!track) throw new Error("캔버스 영상 트랙을 만들 수 없습니다.");
+      }
+      const candidates = [
+        'video/mp4;codecs="avc1.42E01E"',
+        'video/mp4;codecs="avc1.4D401E"',
+        'video/mp4;codecs="avc1.640028"',
+        "video/mp4;codecs=h264",
+        "video/webm;codecs=vp9",
+        "video/webm;codecs=vp8",
+        "video/webm"
+      ];
+      for (const mimeType of candidates) {
+        if (!MediaRecorder.isTypeSupported(mimeType)) continue;
+        try { recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 7000000 }); break; }
+        catch (_) { /* A supported MIME can still fail at construction. */ }
+      }
+      if (!recorder) throw new Error("지원되는 MP4(H.264) 또는 WebM 녹화 형식이 없습니다.");
+      const mime = recorder.mimeType;
+      const extension = /^video\/mp4(?:;|$)/i.test(mime) ? "mp4" : "webm";
+      const recording = new Promise((resolve, reject) => {
+        rejectRecording = reject;
+        recorder.ondataavailable = event => { if (event.data && event.data.size) chunks.push(event.data); };
+        recorder.onerror = event => fail(event.error || new Error("동영상 인코딩 중 오류가 발생했습니다."));
+        recorder.onstop = () => {
+          if (error) { reject(error); return; }
+          if (!chunks.length) { reject(new Error("동영상 데이터가 생성되지 않았습니다.")); return; }
+          resolve(new Blob(chunks, { type: mime }));
+        };
+        try {
+          // Do not request timeslices: collect final data before downloading.
+          recorder.start();
+          const startAt = performance.now();
+          let lastTick = startAt;
+          let nextFrame = 1;
+          let ending = false;
+          const request = () => { if (manualFrames) track.requestFrame(); };
+          request();
+          const report = elapsed => {
+            const percent = Math.min(99, Math.floor(elapsed / (duration * 1000) * 100));
+            status.textContent = "동영상 내보내는 중 " + percent + "% · 이 탭을 계속 열어 두세요.";
+          };
+          report(0);
+          const tick = now => {
+            if (error || ending) return;
+            try {
+              checkVisible();
+              checkCancelled();
+              // Never silently compensate for a suspended/busy foreground tab by
+              // skipping ahead or recording a long frozen section.
+              if (now - lastTick > 900) throw new Error("탭 또는 기기가 잠시 멈춰 내보내기를 중단했습니다. 다른 작업을 줄이고 다시 시도해 주세요.");
+              lastTick = now;
+              const elapsed = now - startAt;
+              if (elapsed >= duration * 1000) {
+                ending = true;
+                draw(duration);
+                request();
+                status.textContent = "동영상 마무리 중… 이 탭을 계속 열어 두세요.";
+                // Keep the endpoint visible for one frame so the encoder can
+                // capture it. The real-time file can be ~one frame longer.
+                stopTimer = setTimeout(() => {
+                  try {
+                    checkVisible();
+                    checkCancelled();
+                    if (performance.now() - lastTick > 900) throw new Error("마무리 중 탭이 멈췄습니다. 다시 내보내 주세요.");
+                    recorder.stop();
+                  } catch (reason) { fail(reason); }
+                }, frameMs);
+                return;
+              }
+              if (elapsed >= nextFrame * frameMs) {
+                const overdue = elapsed - nextFrame * frameMs;
+                if (overdue > frameMs * 2) nextFrame = Math.floor(elapsed / frameMs);
+                // Fixed logical frame times, always beginning at zero.
+                draw(Math.min(duration, nextFrame / fps));
+                request();
+                nextFrame++;
+                report(elapsed);
+              }
+              raf = requestAnimationFrame(tick);
+            } catch (reason) { fail(reason); }
+          };
+          // rAF tracks visibility; the watchdog also catches suspended rAF or
+          // an encoder that never dispatches its final stop event.
+          watchdog = setInterval(() => {
+            try {
+              checkVisible();
+              checkCancelled();
+              const now = performance.now();
+              if (!ending && now - lastTick > 900) throw new Error("화면 갱신이 멈춰 내보내기를 중단했습니다. 이 탭에서 다시 시도해 주세요.");
+              if (ending && now - lastTick > 15000) throw new Error("동영상 마무리 시간이 초과되었습니다. 다시 시도해 주세요.");
+            } catch (reason) { fail(reason); }
+          }, 100);
+          raf = requestAnimationFrame(tick);
+        } catch (reason) { fail(reason); }
+      });
+      const blob = await recording;
+      checkVisible();
+      checkCancelled();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = base + "." + extension;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      const download = { url, timer: 0 };
+      downloads.add(download);
+      try { link.click(); }
+      catch (reason) { URL.revokeObjectURL(url); downloads.delete(download); throw reason; }
+      finally { link.remove(); }
+      // Give the browser time to consume the URL; never revoke immediately.
+      download.timer = setTimeout(() => { URL.revokeObjectURL(url); downloads.delete(download); }, 60000);
+      result = { blob, filename: link.download, mimeType: mime };
+      status.textContent = "내보내기 100% · " + extension.toUpperCase() + " 다운로드를 요청했습니다. 브라우저의 다운로드 목록을 확인해 주세요.";
+    } catch (reason) {
+      error = error || (reason instanceof Error ? reason : new Error(String(reason)));
+      status.textContent = "내보내기 실패: " + message(error);
+    } finally {
+      cancelAnimationFrame(raf);
+      clearInterval(watchdog);
+      clearTimeout(stopTimer);
+      document.removeEventListener("visibilitychange", checkVisible);
+      rejectRecording = null;
+      if (recorder) {
+        recorder.ondataavailable = recorder.onerror = recorder.onstop = null;
+        try { if (recorder.state !== "inactive") recorder.stop(); } catch (_) {}
+      }
+      if (stream) stream.getTracks().forEach(track => { try { track.stop(); } catch (_) {} });
+      if (canvas) { canvas.width = 0; canvas.height = 0; }
+      chunks.length = 0;
+      // onEnd is paired with an attempted onBegin, or with the export itself
+      // when no onBegin hook was supplied. An onBegin rejection still unwinds.
+      if (onEnd && (hookStarted || !onBegin)) {
+        try { await onEnd({ error, result }); }
+        catch (reason) {
+          status.textContent += " · 정리 훅 오류: " + message(reason);
+        }
+      }
+      button.disabled = oldDisabled;
+      if (oldBusy === null) button.removeAttribute("aria-busy");
+      else button.setAttribute("aria-busy", oldBusy);
+      if (active === job) active = null;
+    }
+  }
+
+  button.addEventListener("click", start);
+  return function unbind() {
+    if (disposed) return;
+    disposed = true;
+    button.removeEventListener("click", start);
+    if (active && active.cancel) active.cancel("내보내기 연결이 해제되어 작업을 취소했습니다.");
+    for (const download of downloads) {
+      clearTimeout(download.timer);
+      URL.revokeObjectURL(download.url);
+    }
+    downloads.clear();
+  };
+}
+
+const $ = id => document.getElementById(id);
+const defaults = SCENE.controls || { zoom: 1, motion: 1, tint: '#ffc570', tintStrength: 0 };
+const ranges = { zoom: [0.8,1.35], motion:[0.5,1.8], tintStrength:[0,0.35], snow:[0,1], ignition:[0,2] };
+let settings = {...defaults}, mode='settings', exporting=false, renderSettings=null;
+const editor=$('editor'), editorNote=$('editor-note');
+const originalScript=document.currentScript.textContent;
+const rendererSource=originalScript.split('// SCENE CODE START')[1].split('// SCENE CODE END')[0].trim();
+function settingSource(o){return '{\n'+Object.entries(o).map(([k,v])=>'  '+JSON.stringify(k)+': '+JSON.stringify(v)).join(',\n')+'\n}';}
+let working=settingSource(settings);
+function selectMode(next){
+  if(mode==='settings')working=editor.value;
+  mode=next; editor.value=mode==='source'?rendererSource:working;editor.readOnly=mode==='source';editor.scrollTop=0;
+  $('settings-tab').setAttribute('aria-pressed',String(mode==='settings'));$('source-tab').setAttribute('aria-pressed',String(mode==='source'));
+  $('apply').hidden=mode==='source'; $('undo').hidden=mode==='source';
+  editorNote.textContent=mode==='source'?'이 파일에서 실제 실행 중인 렌더러입니다. 전체 JS 수정은 HTML 파일을 편집하세요.':'장면 설정(JSON). 숫자나 색을 바꾸고 ‘적용’을 누르세요.';
+}
+function applySettings(){
+  try {
+    const raw=JSON.parse(editor.value);
+    if(!raw||Array.isArray(raw)||typeof raw!=='object')throw Error('JSON 객체 { … }가 필요합니다.');
+    for(const k of Object.keys(raw)){
+      if(!Object.hasOwn(defaults,k))throw Error('지원하지 않는 설정: '+k);
+      const v=raw[k];
+      if(k==='tint') { if(typeof v!=='string'||!/^#[0-9a-f]{6}$/i.test(v))throw Error('tint는 #ffc570 같은 6자리 색상이어야 합니다.'); }
+      else if(ranges[k]){const [a,b]=ranges[k];if(typeof v!=='number'||!Number.isFinite(v)||v<a||v>b)throw Error(`${k}: ${a}~${b} 숫자를 입력하세요.`);}
+      else if(typeof v!==typeof defaults[k]||(typeof v==='number'&&!Number.isFinite(v)))throw Error('잘못된 값: '+k);
+    }
+    settings={...defaults,...raw};working=editor.value=settingSource(settings);paint();editorNote.textContent='적용했습니다. 다음 동영상에도 이 설정이 반영됩니다.';
+  } catch(err){editorNote.textContent='적용하지 않았습니다: '+err.message;}
+}
+editor.value=working;
+$('settings-tab').addEventListener('click',()=>selectMode('settings'));$('source-tab').addEventListener('click',()=>selectMode('source'));
+$('apply').addEventListener('click',applySettings);
+$('undo').addEventListener('click',()=>{editor.value=settingSource(defaults);applySettings();});
+editor.addEventListener('keydown',ev=>{if((ev.metaKey||ev.ctrlKey)&&ev.key==='Enter'&&!editor.readOnly){ev.preventDefault();applySettings();}});
+function renderFilm(g,t,o=settings,x=0,y=0,w=g.canvas.width,h=g.canvas.height){
+  g.save();g.translate(x,y);g.scale(w/SCENE.width,h/SCENE.height);g.beginPath();g.rect(0,0,SCENE.width,SCENE.height);g.clip();
+  // Reset the entire frame before zooming so uncovered edges match in each output.
+  g.globalAlpha=1;g.globalCompositeOperation='source-over';
+  g.fillStyle='#050b13';g.fillRect(0,0,SCENE.width,SCENE.height);
+  const z=o.zoom||1;if(z!==1){g.translate(SCENE.width/2,SCENE.height/2);g.scale(z,z);g.translate(-SCENE.width/2,-SCENE.height/2)}
+  drawScene(g,clamp(t*(o.motion||1),0,SCENE.duration),o);g.restore();
+  if(o.tintStrength){g.save();g.globalCompositeOperation='soft-light';g.globalAlpha=o.tintStrength;g.fillStyle=o.tint;g.fillRect(x,y,w,h);g.restore()}
+}
+function codeExcerpt(){const lines=rendererSource.split('\n');const start=Math.max(0,lines.findIndex(l=>/^function drawScene\(/.test(l)));return lines.slice(start,start+8).map((s,i)=>[start+i+1,s]);}
+function renderWithCode(g,t){
+  const {width:w,height:h}=g.canvas,p=54,split=Math.round(h*.738),top=28, end=split-30;
+  g.fillStyle='#07101a';g.fillRect(0,0,w,h);g.save();g.beginPath();g.rect(0,0,w,end);g.clip();const artW=Math.min(w,(end-top)*SCENE.width/SCENE.height);renderFilm(g,t,renderSettings,(w-artW)/2,top,artW,end-top);g.restore();
+  g.fillStyle='#101b29';g.fillRect(0,split,w,h-split);g.fillStyle='#284451';g.fillRect(0,split,w,2);
+  g.textBaseline='top';g.fillStyle='#8fe5d2';g.font='600 24px ui-monospace,monospace';g.fillText('PROMPT / ANIMATION',p,split+22);
+  g.fillStyle='#99aec5';g.textAlign='right';g.fillText('drawScene()  ·  JavaScript',w-p,split+22);g.textAlign='left';
+  g.save();g.beginPath();g.rect(p+48,split+72,w-(p*2)-48,h-split-88);g.clip();
+  g.font='23px ui-monospace,monospace';codeExcerpt().forEach(([n,line],i)=>{g.fillStyle=i===0?'#e8c072':'#c9d7e6';g.fillText(line,p+50,split+79+i*38);});g.restore();
+  g.font='20px ui-monospace,monospace';g.fillStyle='#819ab4';codeExcerpt().forEach(([n],i)=>g.fillText(String(n).padStart(2,'0'),p,split+80+i*38));
+}
+const videoButtons=[$('video-scene'),$('video-code')];
+function exportStart(){if(exporting)throw Error('이미 내보내는 중입니다.');exporting=true;renderSettings={...settings};stop();videoButtons.forEach(b=>b.disabled=true);}
+function exportEnd(){exporting=false;renderSettings=null;videoButtons.forEach(b=>b.disabled=false);}
+const targetName=SCENE.filename||'prompt-animation';
+bindVideoExport({button:videoButtons[0],status:$('video-status'),width:stage.width,height:stage.height,duration:SCENE.duration,render:(g,t)=>renderFilm(g,t,renderSettings),filename:targetName,onBegin:exportStart,onEnd:exportEnd});
+bindVideoExport({button:videoButtons[1],status:$('video-status'),width:1080,height:1920,duration:SCENE.duration,render:renderWithCode,filename:targetName+'-with-code',onBegin:exportStart,onEnd:exportEnd});
+
+let sceneMode='auto', scrollRaf=0;
+const modeHint=$('mode-hint'), actionButton=$('perform-action');
+const modeCopy={auto:'자동으로 처음부터 재생합니다.', still:'슬라이더로 원하는 순간을 골라 정지 화면으로 감상하세요.', action:SCENE.actionLabel?'트리를 클릭하거나 점등 버튼을 누르세요.':'장면을 클릭하거나 실행 버튼을 누르세요.', scroll:'화면을 아래로 스크롤하면 진행되고 위로 올리면 되감깁니다.'};
+const modeButtons=[...document.querySelectorAll('[data-playmode]')];
+function modeState(val){
+  sceneMode=val; stop();
+  document.body.classList.toggle('scroll-mode',val==='scroll');
+  modeButtons.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.playmode===val)));
+  actionButton.hidden=val!=='action'; modeHint.textContent=modeCopy[val];
+  play.disabled=val==='scroll'||val==='still'||val==='action';
+  seek.disabled=val==='scroll';
+  if(val==='auto'){setTime(0);start();}
+  if(val==='action'){setTime(0);}
+  if(val==='scroll'){setTime(0); requestAnimationFrame(syncScroll);}
+}
+function syncScroll(){
+  scrollRaf=0;if(sceneMode!=='scroll'||exporting||clean)return;
+  const el=$('scroll-area'), span=el.offsetHeight-$('scene-view').offsetHeight;
+  if(span>0)setTime(clamp(-el.getBoundingClientRect().top/span)*SCENE.duration);
+}
+function kick(){if(sceneMode!=='action'||exporting)return;setTime(0);start();}
+function stageAction(e){
+  if(sceneMode==='auto'){toggle();return;}
+  if(sceneMode!=='action')return;
+  if(!SCENE.hitbox){kick();return;}
+  const r=stage.getBoundingClientRect(), s=Math.min(r.width/SCENE.width,r.height/SCENE.height);
+  const zoom=settings.zoom||1;
+  const x=SCENE.width/2+(e.clientX-r.left-r.width/2)/(s*zoom);
+  const y=SCENE.height/2+(e.clientY-r.top-r.height/2)/(s*zoom);
+  const [a,b,c,d]=SCENE.hitbox;if(x>=a&&y>=b&&x<=c&&y<=d)kick();
+}
+function resetByMode(){if(sceneMode==='scroll'){const el=$('scroll-area');window.scrollTo({top:el.getBoundingClientRect().top+window.scrollY,behavior:'instant'});syncScroll();}else setTime(0);}
+modeButtons.forEach(b=>b.addEventListener('click',()=>modeState(b.dataset.playmode)));
+actionButton.textContent=SCENE.actionLabel||'장면 실행';actionButton.addEventListener('click',kick);
+window.addEventListener('scroll',()=>{if(sceneMode==='scroll'&&!scrollRaf)scrollRaf=requestAnimationFrame(syncScroll);},{passive:true});
+window.addEventListener('resize',()=>{if(sceneMode==='scroll'&&!scrollRaf)scrollRaf=requestAnimationFrame(syncScroll);});
+
+setClean(clean);paint();const requestedMode=params.get('mode');if(['still','action','scroll'].includes(requestedMode))modeState(requestedMode);else if(auto)start();
+</script></body></html>

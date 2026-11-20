@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ASCII Art Animation</title>
+<style>
+*{box-sizing:border-box}html{color-scheme:dark;background:#070d10}body{min-height:100svh;margin:0;display:grid;place-items:center}main{display:grid;width:min(100vw,56.25svh);aspect-ratio:9/16;grid-template-rows:74% 26%;background:#0b1217;overflow:hidden}canvas{width:100%;height:100%;min-height:0;display:block}section{display:grid;min-height:0;grid-template-rows:auto minmax(0,1fr);border-top:1px solid #405756;background:#0c161e}header{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid #263940;color:#a9bdbb;font:600 clamp(9px,2.4vw,12px)/1.2 ui-monospace,monospace;letter-spacing:.04em}#phase{color:#ffd389}#view{overflow:hidden;min-height:0;margin:0;white-space:pre;position:relative}#source{display:block;padding:6px 0 42px;transform:translateY(var(--code-y,0px));font:500 clamp(9.5px,2.65vw,14px)/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#bacdc7}#source span{display:block;overflow:hidden;padding:0 8px;border-left:2px solid transparent}#source b{color:#70868b;font-weight:400;display:inline-block;width:3.25em;user-select:none}#source .focus{border-color:#edbb73;background:#29302c;color:#fff0ce}#source .focus b{color:#d7ac74}
+#view:focus-visible{outline:2px solid #ffd389;outline-offset:-2px}
+</style></head><body><main>
+<canvas width="900" height="1184" role="img" aria-label="ASCII art animation"></canvas>
+<section aria-label="Renderer source"><header><span>scene.js</span><span id="phase">Ready</span></header><pre id="view" tabindex="0" aria-keyshortcuts="Space"><code id="source"></code></pre></section>
+</main>
+<script id="scene-js">
+(() => {
+  'use strict';
+  const cv=document.querySelector('canvas'), g=cv.getContext('2d',{alpha:false});
+  const cols=72, rows=66, center=36;
+  const clamp=x=>Math.min(1,Math.max(0,x));
+  const smooth=x=>(x=clamp(x),x*x*(3-2*x));
+  const seed=(x,y)=>.5+.5*Math.sin(x*78.45+y*184.9);
+  let queue=null;
+  function glyph(x,y,char,color,alpha=1){
+    if(alpha<=0)return;
+    if(queue){queue.push([x,y,char,color,alpha]);return;}
+    g.globalAlpha=clamp(alpha);g.fillStyle=color;g.fillText(char,29+x*11.7,64+y*16.2);
+  }
+  // BEGIN AUTHORED SCENE
+  const scene = null;
+  // END AUTHORED SCENE
+  if(!scene)throw new Error('Fill the authored scene block.');
+  const korean=scene.lang==='ko';
+  document.documentElement.lang=scene.lang;
+  document.title=scene.title;
+  cv.setAttribute('aria-label',scene.description);
+  document.querySelector('section').setAttribute('aria-label',korean?'실제 렌더링 코드':'Actual renderer source');
+  document.querySelector('header span').textContent=korean?'scene.js · 실제 실행 코드':'scene.js · actual renderer';
+  const host=document.querySelector('#source'),view=document.querySelector('#view'),phase=document.querySelector('#phase');
+  view.setAttribute('aria-label',korean?'실제 코드. 스페이스 키로 재생 또는 일시 정지.':'Renderer code. Press Space to play or pause.');
+  const raw=document.currentScript.textContent.trimEnd().split('\n');
+  if(!raw[0])raw.shift();
+  const sectionStart=raw.findIndex(l=>l.trim()==='// BEGIN AUTHORED SCENE');
+  const sectionEnd=raw.findIndex(l=>l.trim()==='// END AUTHORED SCENE');
+  const byFunction=new Map();
+  const entries=raw.map((line,i)=>{
+    const m=/^\s*function\s+([\w$]+)\s*\(/.exec(line);
+    if(m&&i>sectionStart&&i<sectionEnd)byFunction.set(m[1],i);
+    if(m&&m[1]==='clearFrame')byFunction.set(m[1],i);
+    const row=document.createElement('span'),n=document.createElement('b');
+    n.textContent=String(i+1).padStart(2,'0');row.append(n,document.createTextNode(line||' '));host.append(row);return row;
+  });
+  const buildEnd=5.16,motionLength=scene.duration,total=buildEnd+motionLength;
+  if(!Number.isFinite(motionLength)||motionLength<=0||!scene.layers?.length||scene.layers.length>8)throw new Error('Invalid scene timing or layers.');
+  const weightSum=scene.layers.reduce((sum,layer)=>sum+(layer.weight??1),0);
+  let buildCursor=.32;
+  const layers=scene.layers.map(({fn,label,weight=1})=>{
+    if(typeof fn!=='function'||!byFunction.has(fn.name)||!Number.isFinite(weight)||weight<=0)throw new Error('Use a named renderer and positive layer weight.');
+    const from=buildCursor;buildCursor+=(4.95-.32)*weight/weightSum;
+    queue=[];let marks;try{fn(0);marks=queue;}finally{queue=null;}
+    if(!marks.length)throw new Error('Opening layer is empty: '+fn.name);
+    return {from,to:buildCursor,fn,label,marks};
+  });
+  function clearFrame(){
+    g.globalAlpha=1;g.fillStyle=scene.bg;g.fillRect(0,0,cv.width,cv.height);
+    g.font='16px ui-monospace, Menlo, Consolas, monospace';g.textBaseline='middle';
+  }
+  function drawBuild(t){
+    clearFrame();
+    for(const {from,to,marks} of layers){
+      if(t<from)break;
+      const count=Math.floor(marks.length*clamp((t-from)/(to-from)));
+      for(let i=0;i<count;i++)glyph(...marks[i]);
+    }
+  }
+  function drawFrame(t){clearFrame();for(const {fn} of layers)fn(t);}
+  const ready=korean?'준비':'Ready',building=korean?'그리는 중 · ':'Drawing · ',playing=korean?'재생 · ':'Playing · ';
+  const motion=scene.motion;
+  if(!Array.isArray(motion)||motion[0]?.[0]!==0||motion.some(([at,fn,label],i)=>!Number.isFinite(at)||at<0||at>motionLength||(i>0&&at<=motion[i-1][0])||!layers.some(layer=>layer.fn===fn)||!label))throw new Error('Use increasing motion cues for actual layer functions, starting at zero.');
+  const cues=[
+    [0,byFunction.get('clearFrame'),ready],
+    ...layers.map(({from,fn,label})=>[from,byFunction.get(fn.name),building+label]),
+    ...motion.map(([t,fn,label])=>[buildEnd+t,byFunction.get(fn.name),playing+label]),
+  ];
+  const pref=matchMedia('(prefers-reduced-motion: reduce)');
+  let memo=-1,animation=0,last=0,paused=false,lineHeight=16,maxScroll=0;
+  function measure(){lineHeight=entries[0].offsetHeight||16;maxScroll=Math.max(0,host.offsetHeight-view.clientHeight);}
+  function showCode(t){
+    let i=cues.length-1;while(i>0&&t<cues[i][0])i--;
+    const [from,row,caption]=cues[i],previous=i?cues[i-1][1]:row;
+    const blend=pref.matches?1:smooth((t-from)/.2);
+    const target=previous+(row-previous)*blend;
+    host.style.setProperty('--code-y',`${-Math.min(maxScroll,Math.max(0,(target-1)*lineHeight)).toFixed(2)}px`);
+    if(memo!==i){
+      if(memo>=0)entries[cues[memo][1]].classList.remove('focus');
+      entries[row].classList.add('focus');phase.textContent=caption;memo=i;
+    }
+  }
+  function paint(t){if(t<buildEnd)drawBuild(t);else drawFrame(t-buildEnd);showCode(t);}
+  function advance(from){
+    let begin;
+    function frame(now){
+      begin??=now;last=Math.min(total,from+(now-begin)/1000);paint(last);
+      animation=last<total?requestAnimationFrame(frame):0;
+    }
+    animation=requestAnimationFrame(frame);
+  }
+  function start(){
+    cancelAnimationFrame(animation);animation=0;paused=false;measure();
+    if(pref.matches){last=buildEnd+Math.min(motionLength,Math.max(0,scene.stillAt??motionLength*.75));paint(last);return;}
+    last=0;paint(last);advance(0);
+  }
+  window.addEventListener('resize',()=>{measure();showCode(last);});
+  window.addEventListener('keydown',e=>{
+    if(e.code!=='Space'||e.repeat||e.altKey||e.ctrlKey||e.metaKey||e.shiftKey||pref.matches)return;
+    e.preventDefault();
+    if(animation){cancelAnimationFrame(animation);animation=0;paused=true;return;}
+    if(paused){paused=false;advance(last);}else start();
+  });
+  pref.addEventListener('change',start);
+  start();
+})();
+</script></body></html>

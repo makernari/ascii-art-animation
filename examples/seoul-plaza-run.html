@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>서울광장, RUN</title>
+<style>
+*{box-sizing:border-box}html{background:#080d10;color-scheme:dark}body{margin:0;overflow:hidden;display:grid;place-items:center;min-height:100svh}canvas{display:block;width:min(100vw,56.25svh);height:auto;aspect-ratio:9/16;max-height:100svh}
+</style></head><body>
+<canvas id="scene" width="720" height="1280" role="img" aria-label="서울광장 성탄트리에 불이 오르고 눈이 내리는 문자 애니메이션"></canvas>
+<script>
+'use strict';
+(()=>{
+const canvas=document.querySelector('#scene'), ctx=canvas.getContext('2d',{alpha:false});
+const cols=80, rows=85, dx=8.35, dy=13, ox=25, oy=118, center=40, top=12, bottom=61, duration=12;
+const p={night:'#080e12',blue:'#30444a',dull:'#5c736d',rim:'#839b91',floor:'#415550',snow:'#b0c6c0',green:'#557d65',leaf:'#335746',deep:'#223e35',amber:'#ffd38b',gold:'#daa361',red:'#ca8171',silver:'#d4d9bc',white:'#fff0bc'};
+function rng(seed){return ()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296)}
+const rand=rng(40126), pick=(s,q)=>s[Math.min(s.length-1,Math.floor(q*s.length))];
+const clamp=x=>Math.min(1,Math.max(0,x));const ease=x=>(x=clamp(x),x*x*(3-2*x));
+const face=Array.from({length:rows},()=>Array.from({length:cols},()=>rand()));
+const snow=Array.from({length:130},()=>[rand()*cols,rand()*rows,1.9+rand()*7,rand()*12,rand()]);
+const stars=Array.from({length:92},()=>[Math.floor(rand()*cols),Math.floor(rand()*49),rand()]);
+function put(c,r,s,color,opacity=1){if(r<0||r>=rows||c<0||c>=cols||!s||s===' '||opacity<=0)return; ctx.globalAlpha=clamp(opacity);ctx.fillStyle=color;ctx.fillText(s,ox+c*dx,oy+r*dy);}
+function say(c,r,s,color){for(let i=0;i<s.length;i++)put(c+i,r,s[i],color)}
+function line(c0,r0,c1,r1,s,color,o=1){let n=Math.max(Math.abs(c1-c0),Math.abs(r1-r0));for(let i=0;i<=n;i++){let f=n?i/n:0;put(Math.round(c0+(c1-c0)*f),Math.round(r0+(r1-r0)*f),s,color,o);}}
+function shapeWidth(q){return 1+Math.floor(26*q**.83*(.90+.105*Math.cos(q*37)+.045*Math.cos(q*87)));}
+function sky(t){
+  for(const [x,y,a] of stars)put(x,y,a>.92?'+':'.',p.snow,.22+a*.34+.12*Math.sin(t+y));
+  for(let r=8;r<=15;r++)for(let x=61;x<74;x++){const j=(x-67)/5,k=(r-11.5)/3.5;if(j*j+k*k<1&&((j-.48)**2+(k+.23)**2>.86))put(x,r,':',p.silver,.72);}
+}
+function city(){
+  const outline=[[0,43,8,61],[7,47,13,61],[12,40,19,60],[19,49,24,61],[55,48,60,61],[60,43,67,61],[67,50,74,61],[73,42,79,61]];
+  for(const [a,top,b,h] of outline){line(a,top,b,top,'_',p.blue);line(a,top,a,h,'|',p.blue);line(b,top,b,h,'|',p.blue);for(let r=top+2;r<h;r+=3)for(let c=a+2;c<b;c+=2)put(c,r,face[r][c]>.86?'+':':',face[r][c]>.86?p.gold:p.blue,.51);}
+  line(4,52,9,46,'/',p.rim);line(9,46,22,46,'_',p.rim);line(22,46,27,52,'\\',p.rim);line(53,52,58,46,'/',p.rim);line(58,46,71,46,'_',p.rim);line(71,46,76,52,'\\',p.rim);
+  for(let r=52;r<=63;r++)for(let c=4;c<=76;c++){if(r===53||r===58||r===63)put(c,r,'_',p.rim,.68);else if(c%4===1)put(c,r,'|',p.rim,.82);else if(c%4===2&&[55,56,60,61].includes(r))put(c,r,r%2?'+':':',c%7===2?p.gold:p.dull,.65);}
+  for(const c of [1,9,70,78]){line(c,52,c,63,'|',p.dull,.8);put(c,51,'+',p.amber,.76);put(c-1,51,'.',p.gold,.61);put(c+1,51,'.',p.gold,.61);}
+}
+function tree(t,lit){
+  for(let r=top;r<=bottom;r++){
+    const q=(r-top)/(bottom-top), w=shapeWidth(q), sway=q>.25?Math.round(Math.sin(r*.33)):0;
+    for(let n=-w;n<=w;n++){
+      const c=center+n+sway,a=face[r][c], on=ease((lit-(1-q))*5), flash=.65+.35*Math.sin(t*3+a*20+r*.32);
+      const coil=Math.abs(((r+Math.floor(n*.36)+360)%9)-2)===0;
+      if(on>.04&&(coil&&a>.37||a>.91)){const hue=a>.975?p.red:a>.94?p.silver:coil?p.gold:p.amber;put(c,r,pick(coil?'..+o':'+*o@',a*9%1),hue,on*(.60+.40*flash));}
+      else if(Math.abs(n)===w)put(c,r,n<0?'/':'\\',p.green,.67+on*.25);
+      else put(c,r,pick(".::/\\^vY#",a),a>.58?p.green:a>.30?p.leaf:p.deep,.66+on*.34);
+    }
+  }
+  const spark=ease((t-5.1)/1.1),pulse=Math.max(0,1-Math.abs(t-6.15));
+  if(spark>.01){put(center,top-2,'*',p.white,spark);put(center,top-3,'+',p.amber,spark*.8);put(center,top-1,'|',p.amber,spark);put(center-1,top-2,'-',p.amber,spark);put(center+1,top-2,'-',p.amber,spark);for(let i=1;i<=9;i++){const x=Math.round(i*Math.cos(t*.7+i*3.2)),y=Math.round(i*.62*Math.sin(i*2.1));put(center+x,top-2+y,'.',p.gold,spark*(.16+.5*pulse));}}
+  else put(center,top-2,'+',p.green,.77);
+  say(37,62,'[|||]',p.rim);say(36,63,'/_____\\',p.dull);
+}
+function plaza(t,lit){
+  for(let r=64;r<84;r++)for(let c=0;c<cols;c++){
+    const q=(r-64)/20, x=c-center, a=face[r][c];
+    if(a>.82||((r-62)**2%17<2))put(c,r,a>.95?'=':'.',p.floor,.23+(1-q)*.28);
+    if(Math.abs(x)<6+q*14 && a>.56){const sparkle=.48+.43*Math.sin(t*3+x*.75+r*.43);put(c,r,pick('..:=',a),a>.93?p.amber:p.gold,lit*(1-q)*sparkle*.63);}
+  }
+  for(const [i,c] of [[0,8],[1,17],[2,63],[3,70]]){const x=c+Math.round(Math.sin(t*.56+i)*2),y=67+i%2;put(x,y,'o',p.rim,.79);put(x,y+1,'A',p.dull);put(x,y+2,Math.sin(t*3+i)>.1?'/':'|',p.dull);}
+}
+function flakes(t){for(const [a,b,v,ph,s] of snow){const x=Math.floor((a+cols+Math.sin(t*.48+ph)*3+t*v*.21)%cols), y=Math.floor((b+t*v)%rows);if(y>1&&y<83)put(x,y,s>.94?'*':'.',p.snow,.22+s*.49);}}
+function draw(t){
+  ctx.globalAlpha=1;ctx.fillStyle=p.night;ctx.fillRect(0,0,720,1280);ctx.font='14px ui-monospace, Menlo, Consolas, monospace';ctx.textBaseline='middle';
+  const light=ease((t-1.0)/4.8)*1.27;
+  sky(t);city();plaza(t,ease((t-3.2)/2.5));tree(t,light);flakes(t);
+  say(2,1,'SEOUL / WINTER 2026',p.rim);say(60,1,'12.2026',p.dull);line(2,3,77,3,'-',p.blue,.75);
+  line(2,84,77,84,'-',p.blue,.75);say(2,83,'SEOUL PLAZA',p.rim);say(59,83,t>6?'LIGHTS ON':'WINTER NIGHT',t>6?p.gold:p.dull);
+  ctx.globalAlpha=1;
+}
+const motion=matchMedia('(prefers-reduced-motion: reduce)');let tick=0;
+function play(){let origin;const frame=now=>{origin??=now;const t=Math.min(duration,(now-origin)/1000);draw(t);tick=t<duration?requestAnimationFrame(frame):0;};tick=requestAnimationFrame(frame);}
+function start(){if(tick)cancelAnimationFrame(tick);draw(motion.matches?8:0);if(!motion.matches)play();}
+motion.addEventListener('change',start);start();
+})();
+</script></body></html>

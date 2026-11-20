@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prompt Animation</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#070b12;color:#e7eef5;font:13px/1.4 system-ui,sans-serif}main{width:min(100%,1000px);margin:auto;padding:12px;display:grid;gap:12px}.brand{padding:4px 1px 0;color:#91a7ba;display:flex;align-items:center;justify-content:space-between;gap:8px}.brand strong{color:#8fe5d2;font:600 13px ui-monospace,monospace;letter-spacing:.08em}.brand span{font:11px ui-monospace,monospace}.view{background:#0b1420;border:1px solid #253547;border-radius:11px;display:grid;justify-items:center;padding:0;overflow:hidden}.screen{width:100%;height:min(61svh,780px);min-height:215px;display:grid;place-items:center;background:#050b13}canvas{display:block;object-fit:contain;width:100%;height:100%;min-height:0;min-width:0;touch-action:manipulation}.commands{width:100%;display:flex;align-items:center;flex-wrap:wrap;justify-content:center;gap:6px;padding:8px 6px}button{background:#121f2e;color:#e7eef5;border:1px solid #304458;border-radius:6px;padding:4px 8px;font:500 12px system-ui,sans-serif;cursor:pointer;min-height:30px}button:hover{background:#20334a}button:disabled{opacity:.60;cursor:wait}button:focus-visible,input:focus-visible,canvas:focus-visible,textarea:focus-visible{outline:2px solid #e3b96f;outline-offset:-2px}button[aria-pressed=true],#apply{color:#8fe5d2;border-color:#397061}#video-scene,#video-code{color:#ffe7ac;border-color:#675536}input{width:clamp(50px,13vw,150px);accent-color:#e1ae5f}output{min-width:3.4em;text-align:center;font:11px ui-monospace,monospace}.code{border:1px solid #253547;border-radius:11px;overflow:hidden;background:#0e1927}.code-head{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:8px 10px;border-bottom:1px solid #253547}.code-head strong{margin-right:auto;font-size:12px;white-space:nowrap}.code textarea{display:block;width:100%;height:156px;resize:vertical;margin:0;border:0;border-radius:0;background:#091421;color:#b8e9db;padding:10px 12px;line-height:1.6;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;tab-size:2;white-space:pre;overflow:auto}.code textarea[readonly]{color:#bbd1e2}.note{margin:0;padding:6px 10px;color:#a2b8cc;font-size:11px;min-height:18px}.view .note:empty{display:none}.clean main{width:100%;margin:0;padding:0}.clean .brand,.clean .commands,.clean .code,.clean .note{display:none}.clean .view{border:0;border-radius:0}.clean .screen{height:100svh}.clean body{overflow:hidden}@media(max-width:480px){main{padding:6px;gap:7px}.screen{height:54svh}.commands{gap:4px}.code textarea{height:110px}.code-head{padding:5px}.code-head button{padding:3px 5px}.brand{padding-top:0}}
+[hidden]{display:none!important}.modes{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;padding:7px 4px 0}.modes button{min-height:28px}.mode-caption{margin:4px 8px 1px;font-size:11px;color:#a2b8cc;text-align:center}.scroll-mode #scroll-area{height:calc(100svh + 680px)}.scroll-mode #scene-view{position:sticky;top:5px}.scroll-mode .screen{height:min(53svh,640px)}.clean .modes,.clean .mode-caption{display:none}.clean #scroll-area{height:auto}.clean #scene-view{position:static}</style>
+</head>
+<body><main><header class="brand"><strong>Prompt / Animation</strong><span>LOCAL SCENE STUDIO</span></header><div id="scroll-area"><section class="view" id="scene-view" aria-label="실행 화면"><nav class="modes" aria-label="감상 모드"><button type="button" data-playmode="auto" aria-pressed="true">자동 재생</button><button type="button" data-playmode="still" aria-pressed="false">정지 감상</button><button type="button" data-playmode="action" aria-pressed="false">클릭 반응</button><button type="button" data-playmode="scroll" aria-pressed="false">스크롤</button><button type="button" id="perform-action" hidden>장면 실행</button></nav><p class="mode-caption" id="mode-hint">열면 자동으로 재생합니다.</p><div class="screen">
+<canvas id="stage" width="1080" height="1920" tabindex="0" aria-label="장면 미리보기. Enter 시작, Space 재생 또는 일시 정지, R 초기화, H 컨트롤 숨기기, S PNG 저장"></canvas></div>
+<div class="commands" aria-label="재생 및 촬영 제어">
+<button id="play" type="button" title="Enter 또는 Space">시작</button>
+<button id="reset" type="button" title="R">초기화</button>
+<input id="scrub" type="range" aria-label="시간 위치" min="0" max="12" value="0" step="0.05"><output id="clock" for="scrub">0.0초</output>
+<button id="still" type="button" title="S">PNG</button>
+<button id="capture" type="button" title="H로 다시 표시">촬영 모드</button>
+<button id="video-scene" type="button">영상 저장 · 장면</button>
+<button id="video-code" type="button">영상 저장 · 장면+코드</button>
+</div><p id="video-status" class="note" role="status" aria-live="polite"></p></section></div>
+<section class="code" aria-label="코드 작성 화면"><div class="code-head"><strong>장면 코드</strong><button type="button" id="settings-tab" aria-pressed="true">설정 편집</button><button type="button" id="source-tab" aria-pressed="false">렌더링 소스</button><button type="button" id="apply">적용</button><button type="button" id="undo">기본값</button></div><textarea id="editor" wrap="off" spellcheck="false" aria-label="장면 코드 편집 및 소스 보기"></textarea><p id="editor-note" class="note" role="status">장면 설정(JSON). 숫자나 색을 바꾸고 ‘적용’을 누르세요.</p></section>
+</main>
+<script>
+'use strict';
+// SCENE CONFIG START
+const SCENE = { title:'Prompt Animation', width:900, height:1600, duration:12, loop:false };
+// SCENE CONFIG END
+const stage = document.querySelector('#stage'), ctx = stage.getContext('2d');
+const play = document.querySelector('#play'), seek = document.querySelector('#scrub'), clock = document.querySelector('#clock');
+const clamp = (x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const mix = (a,b,t)=>a+(b-a)*t;
+const ease = (a,b,t)=>{const x=clamp((t-a)/(b-a));return x*x*(3-2*x)};
+const TAU = Math.PI*2;
+function seeded(seed){return ()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296}}
+// SCENE CODE START
+// Replace this example with original geometry, palette, timed action and layers.
+function drawScene(g,t){
+  const {width:w,height:h}=SCENE;
+  g.fillStyle='#08131f';g.fillRect(0,0,w,h);
+  g.strokeStyle='#83c9c0';g.lineWidth=4;
+  const radius=mix(65,w*.36,ease(.3,4,t));
+  g.beginPath();g.arc(w/2,h/2,radius,0,TAU);g.stroke();
+  g.strokeStyle='#e9ac6c';g.beginPath();g.moveTo(w/2,h*.31);g.lineTo(w/2,h*.69);g.stroke();
+}
+// SCENE CODE END
+const params=new URLSearchParams(location.search);
+const reduced=window.matchMedia('(prefers-reduced-motion: reduce)');
+const auto=!reduced.matches&&(params.has('autoplay')?params.get('autoplay')!=='0':!params.has('t'));
+const looping=params.has('loop')?params.get('loop')==='1':SCENE.loop;
+const initialT=params.has('t')&&Number.isFinite(+params.get('t'))?clamp(+params.get('t'),0,SCENE.duration):0;
+let time=initialT, playing=false, origin=0, request=0, clean=params.get('clean')==='1';
+stage.width=1080;stage.height=Math.round(1080*SCENE.height/SCENE.width);
+stage.style.aspectRatio=`${SCENE.width}/${SCENE.height}`;
+document.title=SCENE.title; seek.max=SCENE.duration;
+function paint(){renderFilm(ctx,time);seek.value=time;clock.value=time.toFixed(1)+'초';play.textContent=playing?'일시 정지':time>=SCENE.duration?'다시 재생':time===0?'시작':'재생'}
+function tick(now){const elapsed=(now-origin)/1000;if(elapsed>=SCENE.duration&&!looping){time=SCENE.duration;playing=false;request=0;paint();return}time=looping?elapsed%SCENE.duration:elapsed;paint();request=requestAnimationFrame(tick)}
+function stop(){if(request)cancelAnimationFrame(request);request=0;playing=false;paint()}
+function start(){if(playing)return;if(time>=SCENE.duration)time=0;playing=true;origin=performance.now()-time*1000;paint();request=requestAnimationFrame(tick)}
+function toggle(){playing?stop():start()}
+function setClean(value){clean=value;document.body.classList.toggle('clean',clean);document.querySelector('#capture').setAttribute('aria-pressed',String(clean));if(clean)stage.focus({preventScroll:true});fit()}
+function saveStill(){
+  stage.toBlob(blob=>{
+    if(!blob||!blob.size){window.alert('PNG를 저장하지 못했습니다.');return}
+    const url=URL.createObjectURL(blob), a=document.createElement('a');
+    a.href=url;a.download=`${SCENE.filename||"prompt-animation"}-${Math.round(time*1000)}.png`;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);
+  },'image/png');
+}
+document.querySelector('#still').addEventListener('click',saveStill);
+function setTime(t){time=clamp(t,0,SCENE.duration);stop()}
+function fit(){}
+play.addEventListener('click',toggle);document.querySelector('#reset').addEventListener('click',resetByMode);document.querySelector('#capture').addEventListener('click',()=>setClean(!clean));seek.addEventListener('input',()=>setTime(+seek.value));stage.addEventListener('click',stageAction);
+
+window.addEventListener('keydown',e=>{if(e.repeat||e.metaKey||e.ctrlKey||e.altKey||e.target.tagName==='TEXTAREA'||e.target.isContentEditable)return;const k=e.key.toLowerCase();if(k==='s'&&e.target!==seek){e.preventDefault();saveStill()}else if(k==='h'){e.preventDefault();setClean(!clean)}else if(k==='r'&&e.target!==seek){e.preventDefault();resetByMode()}else if((k==='enter'||k===' ')&&!['BUTTON','INPUT'].includes(e.target.tagName)){e.preventDefault();if(sceneMode==='action')kick();else if(sceneMode==='auto')toggle()}else if((k==='arrowleft'||k==='arrowright')&&e.target===stage){e.preventDefault();setTime(time+(k==='arrowleft'?-.1:.1))}});
+reduced.addEventListener('change',()=>{if(reduced.matches&&playing)stop()});
+Object.defineProperty(window,'scenePlayback',{value:{seek:setTime, get time(){return time}, get playing(){return playing}, get duration(){return SCENE.duration}},writable:false});
+/**
+ * Bind a real-time, silent 30 fps canvas export to a button.
+ * render(ctx, t) must draw a complete frame synchronously, using only t
+ * (seconds), not the preview's canvas, clock, or playback position.
+ * Returns an unbind function; calling it also cancels an active export.
+ */
+function bindVideoExport({ button, status, width, height, duration, render, filename, onBegin, onEnd }) {
+  if (!button || typeof button.addEventListener !== "function" || !status || !("textContent" in status)) {
+    throw new TypeError("button과 status 요소가 필요합니다.");
+  }
+  if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0 ||
+      !Number.isFinite(duration) || duration <= 0 || typeof render !== "function" ||
+      typeof filename !== "string" || !filename.trim() || /[\\/\x00-\x1f\x7f]/.test(filename) ||
+      (onBegin != null && typeof onBegin !== "function") || (onEnd != null && typeof onEnd !== "function")) {
+    throw new TypeError("크기, 재생 시간, render, 안전한 파일 이름과 훅을 확인해 주세요.");
+  }
+
+  const fps = 30;
+  const frameMs = 1000 / fps;
+  const base = filename.trim().replace(/\.(?:mp4|webm)$/i, "");
+  if (!base || /^\.+$/.test(base)) throw new TypeError("안전한 파일 이름이 필요합니다.");
+  let disposed = false;
+  let active = null;
+  const downloads = new Set();
+
+  async function start(event) {
+    event.preventDefault();
+    if (disposed || active) return;
+    const job = { cancel: null, cancelled: false };
+    active = job;
+    const oldDisabled = button.disabled;
+    const oldBusy = button.getAttribute("aria-busy");
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    status.textContent = "내보내기 준비 중… 완료될 때까지 이 탭을 열어 두고 다른 탭으로 이동하거나 창을 최소화하지 마세요.";
+
+    let canvas, stream, recorder, raf = 0, watchdog = 0, stopTimer = 0;
+    let hookStarted = false, error = null, result = null;
+    let rejectRecording = null;
+    const chunks = [];
+    const message = value => value instanceof Error ? value.message : String(value);
+    const fail = reason => {
+      if (!error) error = reason instanceof Error ? reason : new Error(String(reason));
+      if (rejectRecording) rejectRecording(error);
+    };
+    job.cancel = reason => {
+      job.cancelled = true;
+      fail(new Error(reason || "내보내기를 취소했습니다."));
+    };
+    const checkVisible = () => {
+      if (document.visibilityState !== "visible") {
+        job.cancel("탭이 숨겨져 내보내기를 중단했습니다. 이 탭을 계속 열어 둔 상태에서 다시 시도해 주세요.");
+      }
+    };
+    const checkCancelled = () => { if (error || job.cancelled || disposed) throw error || new Error("내보내기를 취소했습니다."); };
+    const draw = t => {
+      const value = render(canvas.getContext("2d"), t);
+      if (value && typeof value.then === "function") {
+        // Consume a rejected promise without letting it escape this synchronous API.
+        Promise.resolve(value).catch(() => {});
+        throw new Error("render는 비동기 함수가 아닌 동기 함수여야 합니다.");
+      }
+    };
+
+    document.addEventListener("visibilitychange", checkVisible);
+    try {
+      checkVisible();
+      checkCancelled();
+      if (typeof MediaRecorder === "undefined" || typeof HTMLCanvasElement.prototype.captureStream !== "function") {
+        throw new Error("이 브라우저는 동영상 내보내기를 지원하지 않습니다.");
+      }
+      if (onBegin) { hookStarted = true; await onBegin(); }
+      checkCancelled();
+      checkVisible();
+      checkCancelled();
+      canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      if (!canvas.getContext("2d")) throw new Error("내보내기용 캔버스를 만들 수 없습니다.");
+      draw(0);
+      // A private canvas: no preview controls, status UI, or audio tracks are captured.
+      stream = canvas.captureStream(0);
+      let track = stream.getVideoTracks()[0];
+      if (!track) throw new Error("캔버스 영상 트랙을 만들 수 없습니다.");
+      const manualFrames = typeof track.requestFrame === "function";
+      if (!manualFrames) {
+        stream.getTracks().forEach(item => item.stop());
+        stream = canvas.captureStream(fps);
+        track = stream.getVideoTracks()[0];
+        if (!track) throw new Error("캔버스 영상 트랙을 만들 수 없습니다.");
+      }
+      const candidates = [
+        'video/mp4;codecs="avc1.42E01E"',
+        'video/mp4;codecs="avc1.4D401E"',
+        'video/mp4;codecs="avc1.640028"',
+        "video/mp4;codecs=h264",
+        "video/webm;codecs=vp9",
+        "video/webm;codecs=vp8",
+        "video/webm"
+      ];
+      for (const mimeType of candidates) {
+        if (!MediaRecorder.isTypeSupported(mimeType)) continue;
+        try { recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 7000000 }); break; }
+        catch (_) { /* A supported MIME can still fail at construction. */ }
+      }
+      if (!recorder) throw new Error("지원되는 MP4(H.264) 또는 WebM 녹화 형식이 없습니다.");
+      const mime = recorder.mimeType;
+      const extension = /^video\/mp4(?:;|$)/i.test(mime) ? "mp4" : "webm";
+      const recording = new Promise((resolve, reject) => {
+        rejectRecording = reject;
+        recorder.ondataavailable = event => { if (event.data && event.data.size) chunks.push(event.data); };
+        recorder.onerror = event => fail(event.error || new Error("동영상 인코딩 중 오류가 발생했습니다."));
+        recorder.onstop = () => {
+          if (error) { reject(error); return; }
+          if (!chunks.length) { reject(new Error("동영상 데이터가 생성되지 않았습니다.")); return; }
+          resolve(new Blob(chunks, { type: mime }));
+        };
+        try {
+          // Do not request timeslices: collect final data before downloading.
+          recorder.start();
+          const startAt = performance.now();
+          let lastTick = startAt;
+          let nextFrame = 1;
+          let ending = false;
+          const request = () => { if (manualFrames) track.requestFrame(); };
+          request();
+          const report = elapsed => {
+            const percent = Math.min(99, Math.floor(elapsed / (duration * 1000) * 100));
+            status.textContent = "동영상 내보내는 중 " + percent + "% · 이 탭을 계속 열어 두세요.";
+          };
+          report(0);
+          const tick = now => {
+            if (error || ending) return;
+            try {
+              checkVisible();
+              checkCancelled();
+              // Never silently compensate for a suspended/busy foreground tab by
+              // skipping ahead or recording a long frozen section.
+              if (now - lastTick > 900) throw new Error("탭 또는 기기가 잠시 멈춰 내보내기를 중단했습니다. 다른 작업을 줄이고 다시 시도해 주세요.");
+              lastTick = now;
+              const elapsed = now - startAt;
+              if (elapsed >= duration * 1000) {
+                ending = true;
+                draw(duration);
+                request();
+                status.textContent = "동영상 마무리 중… 이 탭을 계속 열어 두세요.";
+                // Keep the endpoint visible for one frame so the encoder can
+                // capture it. The real-time file can be ~one frame longer.
+                stopTimer = setTimeout(() => {
+                  try {
+                    checkVisible();
+                    checkCancelled();
+                    if (performance.now() - lastTick > 900) throw new Error("마무리 중 탭이 멈췄습니다. 다시 내보내 주세요.");
+                    recorder.stop();
+                  } catch (reason) { fail(reason); }
+                }, frameMs);
+                return;
+              }
+              if (elapsed >= nextFrame * frameMs) {
+                const overdue = elapsed - nextFrame * frameMs;
+                if (overdue > frameMs * 2) nextFrame = Math.floor(elapsed / frameMs);
+                // Fixed logical frame times, always beginning at zero.
+                draw(Math.min(duration, nextFrame / fps));
+                request();
+                nextFrame++;
+                report(elapsed);
+              }
+              raf = requestAnimationFrame(tick);
+            } catch (reason) { fail(reason); }
+          };
+          // rAF tracks visibility; the watchdog also catches suspended rAF or
+          // an encoder that never dispatches its final stop event.
+          watchdog = setInterval(() => {
+            try {
+              checkVisible();
+              checkCancelled();
+              const now = performance.now();
+              if (!ending && now - lastTick > 900) throw new Error("화면 갱신이 멈춰 내보내기를 중단했습니다. 이 탭에서 다시 시도해 주세요.");
+              if (ending && now - lastTick > 15000) throw new Error("동영상 마무리 시간이 초과되었습니다. 다시 시도해 주세요.");
+            } catch (reason) { fail(reason); }
+          }, 100);
+          raf = requestAnimationFrame(tick);
+        } catch (reason) { fail(reason); }
+      });
+      const blob = await recording;
+      checkVisible();
+      checkCancelled();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = base + "." + extension;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      const download = { url, timer: 0 };
+      downloads.add(download);
+      try { link.click(); }
+      catch (reason) { URL.revokeObjectURL(url); downloads.delete(download); throw reason; }
+      finally { link.remove(); }
+      // Give the browser time to consume the URL; never revoke immediately.
+      download.timer = setTimeout(() => { URL.revokeObjectURL(url); downloads.delete(download); }, 60000);
+      result = { blob, filename: link.download, mimeType: mime };
+      status.textContent = "내보내기 100% · " + extension.toUpperCase() + " 다운로드를 요청했습니다. 브라우저의 다운로드 목록을 확인해 주세요.";
+    } catch (reason) {
+      error = error || (reason instanceof Error ? reason : new Error(String(reason)));
+      status.textContent = "내보내기 실패: " + message(error);
+    } finally {
+      cancelAnimationFrame(raf);
+      clearInterval(watchdog);
+      clearTimeout(stopTimer);
+      document.removeEventListener("visibilitychange", checkVisible);
+      rejectRecording = null;
+      if (recorder) {
+        recorder.ondataavailable = recorder.onerror = recorder.onstop = null;
+        try { if (recorder.state !== "inactive") recorder.stop(); } catch (_) {}
+      }
+      if (stream) stream.getTracks().forEach(track => { try { track.stop(); } catch (_) {} });
+      if (canvas) { canvas.width = 0; canvas.height = 0; }
+      chunks.length = 0;
+      // onEnd is paired with an attempted onBegin, or with the export itself
+      // when no onBegin hook was supplied. An onBegin rejection still unwinds.
+      if (onEnd && (hookStarted || !onBegin)) {
+        try { await onEnd({ error, result }); }
+        catch (reason) {
+          status.textContent += " · 정리 훅 오류: " + message(reason);
+        }
+      }
+      button.disabled = oldDisabled;
+      if (oldBusy === null) button.removeAttribute("aria-busy");
+      else button.setAttribute("aria-busy", oldBusy);
+      if (active === job) active = null;
+    }
+  }
+
+  button.addEventListener("click", start);
+  return function unbind() {
+    if (disposed) return;
+    disposed = true;
+    button.removeEventListener("click", start);
+    if (active && active.cancel) active.cancel("내보내기 연결이 해제되어 작업을 취소했습니다.");
+    for (const download of downloads) {
+      clearTimeout(download.timer);
+      URL.revokeObjectURL(download.url);
+    }
+    downloads.clear();
+  };
+}
+
+const $ = id => document.getElementById(id);
+const defaults = SCENE.controls || { zoom: 1, motion: 1, tint: '#ffc570', tintStrength: 0 };
+const ranges = { zoom: [0.8,1.35], motion:[0.5,1.8], tintStrength:[0,0.35], snow:[0,1], ignition:[0,2] };
+let settings = {...defaults}, mode='settings', exporting=false, renderSettings=null;
+const editor=$('editor'), editorNote=$('editor-note');
+const originalScript=document.currentScript.textContent;
+const rendererSource=originalScript.split('// SCENE CODE START')[1].split('// SCENE CODE END')[0].trim();
+function settingSource(o){return '{\n'+Object.entries(o).map(([k,v])=>'  '+JSON.stringify(k)+': '+JSON.stringify(v)).join(',\n')+'\n}';}
+let working=settingSource(settings);
+function selectMode(next){
+  if(mode==='settings')working=editor.value;
+  mode=next; editor.value=mode==='source'?rendererSource:working;editor.readOnly=mode==='source';editor.scrollTop=0;
+  $('settings-tab').setAttribute('aria-pressed',String(mode==='settings'));$('source-tab').setAttribute('aria-pressed',String(mode==='source'));
+  $('apply').hidden=mode==='source'; $('undo').hidden=mode==='source';
+  editorNote.textContent=mode==='source'?'이 파일에서 실제 실행 중인 렌더러입니다. 전체 JS 수정은 HTML 파일을 편집하세요.':'장면 설정(JSON). 숫자나 색을 바꾸고 ‘적용’을 누르세요.';
+}
+function applySettings(){
+  try {
+    const raw=JSON.parse(editor.value);
+    if(!raw||Array.isArray(raw)||typeof raw!=='object')throw Error('JSON 객체 { … }가 필요합니다.');
+    for(const k of Object.keys(raw)){
+      if(!Object.hasOwn(defaults,k))throw Error('지원하지 않는 설정: '+k);
+      const v=raw[k];
+      if(k==='tint') { if(typeof v!=='string'||!/^#[0-9a-f]{6}$/i.test(v))throw Error('tint는 #ffc570 같은 6자리 색상이어야 합니다.'); }
+      else if(ranges[k]){const [a,b]=ranges[k];if(typeof v!=='number'||!Number.isFinite(v)||v<a||v>b)throw Error(`${k}: ${a}~${b} 숫자를 입력하세요.`);}
+      else if(typeof v!==typeof defaults[k]||(typeof v==='number'&&!Number.isFinite(v)))throw Error('잘못된 값: '+k);
+    }
+    settings={...defaults,...raw};working=editor.value=settingSource(settings);paint();editorNote.textContent='적용했습니다. 다음 동영상에도 이 설정이 반영됩니다.';
+  } catch(err){editorNote.textContent='적용하지 않았습니다: '+err.message;}
+}
+editor.value=working;
+$('settings-tab').addEventListener('click',()=>selectMode('settings'));$('source-tab').addEventListener('click',()=>selectMode('source'));
+$('apply').addEventListener('click',applySettings);
+$('undo').addEventListener('click',()=>{editor.value=settingSource(defaults);applySettings();});
+editor.addEventListener('keydown',ev=>{if((ev.metaKey||ev.ctrlKey)&&ev.key==='Enter'&&!editor.readOnly){ev.preventDefault();applySettings();}});
+function renderFilm(g,t,o=settings,x=0,y=0,w=g.canvas.width,h=g.canvas.height){
+  g.save();g.translate(x,y);g.scale(w/SCENE.width,h/SCENE.height);g.beginPath();g.rect(0,0,SCENE.width,SCENE.height);g.clip();
+  // Reset the entire frame before zooming so uncovered edges match in each output.
+  g.globalAlpha=1;g.globalCompositeOperation='source-over';
+  g.fillStyle='#050b13';g.fillRect(0,0,SCENE.width,SCENE.height);
+  const z=o.zoom||1;if(z!==1){g.translate(SCENE.width/2,SCENE.height/2);g.scale(z,z);g.translate(-SCENE.width/2,-SCENE.height/2)}
+  drawScene(g,clamp(t*(o.motion||1),0,SCENE.duration),o);g.restore();
+  if(o.tintStrength){g.save();g.globalCompositeOperation='soft-light';g.globalAlpha=o.tintStrength;g.fillStyle=o.tint;g.fillRect(x,y,w,h);g.restore()}
+}
+function codeExcerpt(){const lines=rendererSource.split('\n');const start=Math.max(0,lines.findIndex(l=>/^function drawScene\(/.test(l)));return lines.slice(start,start+8).map((s,i)=>[start+i+1,s]);}
+function renderWithCode(g,t){
+  const {width:w,height:h}=g.canvas,p=54,split=Math.round(h*.738),top=28, end=split-30;
+  g.fillStyle='#07101a';g.fillRect(0,0,w,h);g.save();g.beginPath();g.rect(0,0,w,end);g.clip();const artW=Math.min(w,(end-top)*SCENE.width/SCENE.height);renderFilm(g,t,renderSettings,(w-artW)/2,top,artW,end-top);g.restore();
+  g.fillStyle='#101b29';g.fillRect(0,split,w,h-split);g.fillStyle='#284451';g.fillRect(0,split,w,2);
+  g.textBaseline='top';g.fillStyle='#8fe5d2';g.font='600 24px ui-monospace,monospace';g.fillText('PROMPT / ANIMATION',p,split+22);
+  g.fillStyle='#99aec5';g.textAlign='right';g.fillText('drawScene()  ·  JavaScript',w-p,split+22);g.textAlign='left';
+  g.save();g.beginPath();g.rect(p+48,split+72,w-(p*2)-48,h-split-88);g.clip();
+  g.font='23px ui-monospace,monospace';codeExcerpt().forEach(([n,line],i)=>{g.fillStyle=i===0?'#e8c072':'#c9d7e6';g.fillText(line,p+50,split+79+i*38);});g.restore();
+  g.font='20px ui-monospace,monospace';g.fillStyle='#819ab4';codeExcerpt().forEach(([n],i)=>g.fillText(String(n).padStart(2,'0'),p,split+80+i*38));
+}
+const videoButtons=[$('video-scene'),$('video-code')];
+function exportStart(){if(exporting)throw Error('이미 내보내는 중입니다.');exporting=true;renderSettings={...settings};stop();videoButtons.forEach(b=>b.disabled=true);}
+function exportEnd(){exporting=false;renderSettings=null;videoButtons.forEach(b=>b.disabled=false);}
+const targetName=SCENE.filename||'prompt-animation';
+bindVideoExport({button:videoButtons[0],status:$('video-status'),width:stage.width,height:stage.height,duration:SCENE.duration,render:(g,t)=>renderFilm(g,t,renderSettings),filename:targetName,onBegin:exportStart,onEnd:exportEnd});
+bindVideoExport({button:videoButtons[1],status:$('video-status'),width:1080,height:1920,duration:SCENE.duration,render:renderWithCode,filename:targetName+'-with-code',onBegin:exportStart,onEnd:exportEnd});
+
+let sceneMode='auto', scrollRaf=0;
+const modeHint=$('mode-hint'), actionButton=$('perform-action');
+const modeCopy={auto:'자동으로 처음부터 재생합니다.', still:'슬라이더로 원하는 순간을 골라 정지 화면으로 감상하세요.', action:SCENE.actionLabel?'트리를 클릭하거나 점등 버튼을 누르세요.':'장면을 클릭하거나 실행 버튼을 누르세요.', scroll:'화면을 아래로 스크롤하면 진행되고 위로 올리면 되감깁니다.'};
+const modeButtons=[...document.querySelectorAll('[data-playmode]')];
+function modeState(val){
+  sceneMode=val; stop();
+  document.body.classList.toggle('scroll-mode',val==='scroll');
+  modeButtons.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.playmode===val)));
+  actionButton.hidden=val!=='action'; modeHint.textContent=modeCopy[val];
+  play.disabled=val==='scroll'||val==='still'||val==='action';
+  seek.disabled=val==='scroll';
+  if(val==='auto'){setTime(0);start();}
+  if(val==='action'){setTime(0);}
+  if(val==='scroll'){setTime(0); requestAnimationFrame(syncScroll);}
+}
+function syncScroll(){
+  scrollRaf=0;if(sceneMode!=='scroll'||exporting||clean)return;
+  const el=$('scroll-area'), span=el.offsetHeight-$('scene-view').offsetHeight;
+  if(span>0)setTime(clamp(-el.getBoundingClientRect().top/span)*SCENE.duration);
+}
+function kick(){if(sceneMode!=='action'||exporting)return;setTime(0);start();}
+function stageAction(e){
+  if(sceneMode==='auto'){toggle();return;}
+  if(sceneMode!=='action')return;
+  if(!SCENE.hitbox){kick();return;}
+  const r=stage.getBoundingClientRect(), s=Math.min(r.width/SCENE.width,r.height/SCENE.height);
+  const zoom=settings.zoom||1;
+  const x=SCENE.width/2+(e.clientX-r.left-r.width/2)/(s*zoom);
+  const y=SCENE.height/2+(e.clientY-r.top-r.height/2)/(s*zoom);
+  const [a,b,c,d]=SCENE.hitbox;if(x>=a&&y>=b&&x<=c&&y<=d)kick();
+}
+function resetByMode(){if(sceneMode==='scroll'){const el=$('scroll-area');window.scrollTo({top:el.getBoundingClientRect().top+window.scrollY,behavior:'instant'});syncScroll();}else setTime(0);}
+modeButtons.forEach(b=>b.addEventListener('click',()=>modeState(b.dataset.playmode)));
+actionButton.textContent=SCENE.actionLabel||'장면 실행';actionButton.addEventListener('click',kick);
+window.addEventListener('scroll',()=>{if(sceneMode==='scroll'&&!scrollRaf)scrollRaf=requestAnimationFrame(syncScroll);},{passive:true});
+window.addEventListener('resize',()=>{if(sceneMode==='scroll'&&!scrollRaf)scrollRaf=requestAnimationFrame(syncScroll);});
+
+setClean(clean);paint();const requestedMode=params.get('mode');if(['still','action','scroll'].includes(requestedMode))modeState(requestedMode);else if(auto)start();
+</script></body></html>
