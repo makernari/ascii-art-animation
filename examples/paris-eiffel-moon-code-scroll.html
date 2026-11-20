@@ -3,6 +3,25 @@
 <style>
 *{box-sizing:border-box}html{color-scheme:dark;background:#070d10}body{min-height:100svh;margin:0;display:grid;place-items:center}main{display:grid;width:min(100vw,56.25svh);aspect-ratio:9/16;grid-template-rows:74% 26%;background:#0b1217;overflow:hidden}canvas{width:100%;height:100%;min-height:0;display:block}section{display:grid;min-height:0;grid-template-rows:auto minmax(0,1fr);border-top:1px solid #405756;background:#0c161e}header{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid #263940;color:#a9bdbb;font:600 clamp(9px,2.4vw,12px)/1.2 ui-monospace,monospace;letter-spacing:.04em}#phase{color:#ffd389}#view{overflow:hidden;min-height:0;margin:0;white-space:pre;position:relative}#source{display:block;padding:6px 0 42px;transform:translateY(var(--code-y,0px));font:500 clamp(9.5px,2.65vw,14px)/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#bacdc7}#source span{display:block;overflow:hidden;padding:0 8px;border-left:2px solid transparent}#source b{color:#70868b;font-weight:400;display:inline-block;width:3.25em;user-select:none}#source .focus{border-color:#edbb73;background:#29302c;color:#fff0ce}#source .focus b{color:#d7ac74}
 #view:focus-visible{outline:2px solid #ffd389;outline-offset:-2px}
+section{background:#0b1420;border-top-color:#376259}
+header{background:#101c29;color:#b3c6cf;border-bottom-color:#233748;line-height:1.35}
+header span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#phase{flex:none;color:#b6e2ca}
+#source{padding:5px 0 0;color:#d5dce7;font-size:clamp(9.5px,2.65vw,13px);line-height:1.5}
+#source .editor-row,#source .editor-empty{height:1.5em;padding:0 6px;overflow:hidden;border-left:2px solid transparent}
+#source [hidden]{display:none}
+#source .editor-empty{padding-left:3.2em;margin-top:2px}
+#source b{color:#6d8498;width:3em}
+#source .editor-code,#source i{font-style:normal}
+#source .focus{border-color:#71dfac;background:#172b30;color:#f0f5f5}
+#source .focus b{color:#a4dfc5}
+#source .kw{color:#b9a0ff}#source .num{color:#efb783}#source .str{color:#a4dbb3}#source .fn{color:#80d9ef}#source .comment{color:#869bb0}
+.editor-caret{display:inline-block;width:1.5px;height:1.02em;margin-left:1px;background:#8ef3bf;vertical-align:-.10em;text-decoration:none;box-shadow:0 0 5px #76d9b97a}
+#source .editor-row{display:grid;grid-template-columns:3em minmax(0,1fr);align-items:center}
+#source .editor-rail{display:grid;min-width:0;overflow:hidden;font:inherit;white-space:pre}
+#source .editor-code{width:max-content;min-width:100%}
+#source .focus .editor-code{justify-self:end}
+#source [hidden]{display:none}
 </style></head><body><main>
 <canvas width="900" height="1184" role="img" aria-label="ASCII art animation"></canvas>
 <section aria-label="Renderer source"><header><span>scene.js</span><span id="phase">Ready</span></header><pre id="view" tabindex="0" aria-keyshortcuts="Space"><code id="source"></code></pre></section>
@@ -81,20 +100,16 @@
   document.title=scene.title;
   cv.setAttribute('aria-label',scene.description);
   document.querySelector('section').setAttribute('aria-label',korean?'실제 렌더링 코드':'Actual renderer source');
-  document.querySelector('header span').textContent=korean?'scene.js · 실제 실행 코드':'scene.js · actual renderer';
   const host=document.querySelector('#source'),view=document.querySelector('#view'),phase=document.querySelector('#phase');
-  view.setAttribute('aria-label',korean?'실제 코드. 스페이스 키로 재생 또는 일시 정지.':'Renderer code. Press Space to play or pause.');
   const raw=document.currentScript.textContent.trimEnd().split('\n');
   if(!raw[0])raw.shift();
   const sectionStart=raw.findIndex(l=>l.trim()==='// BEGIN AUTHORED SCENE');
   const sectionEnd=raw.findIndex(l=>l.trim()==='// END AUTHORED SCENE');
   const byFunction=new Map();
-  const entries=raw.map((line,i)=>{
+  raw.forEach((line,i)=>{
+    if(i<=sectionStart||i>=sectionEnd)return;
     const m=/^\s*function\s+([\w$]+)\s*\(/.exec(line);
-    if(m&&i>sectionStart&&i<sectionEnd)byFunction.set(m[1],i);
-    if(m&&m[1]==='clearFrame')byFunction.set(m[1],i);
-    const row=document.createElement('span'),n=document.createElement('b');
-    n.textContent=String(i+1).padStart(2,'0');row.append(n,document.createTextNode(line||' '));host.append(row);return row;
+    if(m)byFunction.set(m[1],i);
   });
   const buildEnd=5.16,motionLength=scene.duration,total=buildEnd+motionLength;
   if(!Number.isFinite(motionLength)||motionLength<=0||!scene.layers?.length||scene.layers.length>8)throw new Error('Invalid scene timing or layers.');
@@ -123,24 +138,115 @@
   const ready=korean?'준비':'Ready',building=korean?'그리는 중 · ':'Drawing · ',playing=korean?'재생 · ':'Playing · ';
   const motion=scene.motion;
   if(!Array.isArray(motion)||motion[0]?.[0]!==0||motion.some(([at,fn,label],i)=>!Number.isFinite(at)||at<0||at>motionLength||(i>0&&at<=motion[i-1][0])||!layers.some(layer=>layer.fn===fn)||!label))throw new Error('Use increasing motion cues for actual layer functions, starting at zero.');
-  const cues=[
-    [0,byFunction.get('clearFrame'),ready],
-    ...layers.map(({from,fn,label})=>[from,byFunction.get(fn.name),building+label]),
-    ...motion.map(([t,fn,label])=>[buildEnd+t,byFunction.get(fn.name),playing+label]),
-  ];
   const pref=matchMedia('(prefers-reduced-motion: reduce)');
-  let memo=-1,animation=0,last=0,paused=false,lineHeight=16,maxScroll=0;
-  function measure(){lineHeight=entries[0].offsetHeight||16;maxScroll=Math.max(0,host.offsetHeight-view.clientHeight);}
-  function showCode(t){
-    let i=cues.length-1;while(i>0&&t<cues[i][0])i--;
-    const [from,row,caption]=cues[i],previous=i?cues[i-1][1]:row;
-    const blend=pref.matches?1:smooth((t-from)/.2);
-    const target=previous+(row-previous)*blend;
-    host.style.setProperty('--code-y',`${-Math.min(maxScroll,Math.max(0,(target-1)*lineHeight)).toFixed(2)}px`);
-    if(memo!==i){
-      if(memo>=0)entries[cues[memo][1]].classList.remove('focus');
-      entries[row].classList.add('focus');phase.textContent=caption;memo=i;
+  document.querySelector('header span').textContent=korean?'scene.js · 실제 코드 타이핑 재생':'scene.js · renderer typing replay';
+  view.setAttribute('aria-label',korean?'실제 코드 타이핑 재생. 스페이스 키로 일시 정지 또는 재생.':'Renderer typing replay. Press Space to pause or play.');
+  const ranges=[[0,layers[0].from,ready,[]]];
+  const spans=new Map([...byFunction].map(([name,start])=>{
+    const end=raw.findIndex((line,i)=>i>start&&/^\s*}\s*$/.test(line)&&line.length-line.trimStart().length===raw[start].length-raw[start].trimStart().length);
+    const fallback=raw.findIndex((line,i)=>i>start&&(i===sectionEnd||/^\s*function\s+[\w$]+\s*\(/.test(line)));
+    return [name,{start,end:/\{.*\}\s*$/.test(raw[start])?start+1:end>start?end+1:fallback>start?fallback:start+1,cursor:0}];
+  }));
+  function excerpt(fn,seconds){
+    const span=spans.get(fn.name),count=span.end-span.start;
+    const limit=Math.min(count,Math.max(1,Math.ceil(seconds*2.6)));
+    const at=span.cursor<count?span.cursor:0;
+    const stop=Math.min(count,at+limit);
+    span.cursor=stop;
+    return raw.slice(span.start+at,span.start+stop).map((text,i)=>({text,number:span.start+at+i+1}));
+  }
+  layers.forEach(({from,fn,label},i)=>{
+    const to=layers[i+1]?.from??buildEnd;
+    ranges.push([from,to,building+label,excerpt(fn,to-from)]);
+  });
+  motion.forEach(([at,fn,label],i)=>{
+    const to=motion[i+1]?.[0]??motionLength;
+    if(to>at)ranges.push([buildEnd+at,buildEnd+to,playing+label,excerpt(fn,to-at)]);
+  });
+  const tokenPattern=/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|\/\/.*|\b(?:function|const|let|if|else|for|while|of|return|continue|break)\b|\b\d+(?:\.\d+)?\b|\b[A-Za-z_$][\w$]*(?=\s*\()/g;
+  function tokenClass(value){
+    if(value.startsWith('//'))return 'comment';
+    if(value[0]==="'"||value[0]==='"')return 'str';
+    if(/^\d/.test(value))return 'num';
+    if(!/^(?:function|const|let|if|else|for|while|of|return|continue|break)$/.test(value))return 'fn';
+    return 'kw';
+  }
+  function makePieces(s,line){
+    let cursor=0;const pieces=[];
+    const part=(text,style)=>{
+      if(!text)return;
+      const node=document.createTextNode('');
+      if(style){const el=document.createElement('i');el.className=style;el.append(node);line.append(el);}
+      else line.append(node);
+      pieces.push({node,text});
+    };
+    for(const token of s.matchAll(tokenPattern)){
+      part(s.slice(cursor,token.index));part(token[0],tokenClass(token[0]));cursor=token.index+token[0].length;
     }
+    part(s.slice(cursor));return pieces;
+  }
+  const lineData=[];
+  for(const range of ranges){
+    const [,,,source]=range;
+    range.first=lineData.length;range.cost=0;
+    source.forEach(({text,number},j)=>{
+      // Guide lines and syntax colors are presentation; code characters stay untouched.
+      const row=document.createElement('span'),no=document.createElement('b');
+      const line=document.createElement('em');row.className='editor-row';row.hidden=true;
+      no.textContent=String(number).padStart(2,'0');no.setAttribute('aria-hidden','true');
+      line.className='editor-code';const pieces=makePieces(text,line);
+      const rail=document.createElement('small');rail.className='editor-rail';rail.append(line);row.append(no,rail);host.append(row);
+      const trim=text.trimStart(),delay=(j%3===1?8:4)+(trim.endsWith('{')?5:0);
+      const charCost=text.length+delay;
+      lineData.push({row,line,pieces,text,from:range.cost,chars:text.length,cost:charCost,shown:-1});
+      range.cost+=charCost;
+    });
+    range.end=lineData.length;
+  }
+  let animation=0,last=0,paused=false,lineHeight=16,viewport=110;
+  let codePaneIndex=-1,current=-1,scroll=0,previousTime=0,staticPass=false;
+  const caret=document.createElement('u');caret.className='editor-caret';caret.setAttribute('aria-hidden','true');
+  const empty=document.createElement('span');empty.className='editor-empty';empty.append(caret);host.prepend(empty);
+  function measure(){
+    lineHeight=parseFloat(getComputedStyle(host).lineHeight)||16;
+    viewport=view.clientHeight||110;
+  }
+  function reveal(row,n){
+    if(row.shown===n)return;
+    row.shown=n;row.row.hidden=n<0;
+    if(n<0)return;
+    let left=n;
+    for(const {node,text} of row.pieces){const next=text.slice(0,Math.max(0,left));if(node.data!==next)node.data=next;left-=text.length;}
+  }
+  function showCode(t){
+    let i=ranges.length-1;while(i>0&&t<ranges[i][0])i--;
+    const range=ranges[i], [from,to,label]=range;
+    const reduced=pref.matches;
+    const local=clamp((t-from)/(to-from));
+    // Slightly faster at the start of each block; brief indent / line-ending pauses.
+    const budget=reduced?range.cost:range.cost*(local+.075*Math.sin(Math.PI*local));
+    let next=-1;
+    for(let j=0;j<lineData.length;j++){
+      const row=lineData[j];
+      if(j<range.first){reveal(row,row.chars);next=j;}
+      else if(j<range.end&&row.from<=budget){reveal(row,Math.min(row.chars,Math.max(0,Math.floor(budget-row.from))));next=j;}
+      else reveal(row,-1);
+    }
+    if(codePaneIndex!==i){phase.textContent=label;codePaneIndex=i;}
+    if(current!==next){
+      if(current>=0)lineData[current].row.classList.remove('focus');
+      if(next>=0){const row=lineData[next];row.row.classList.add('focus');row.line.append(caret);}
+      else empty.append(caret);
+      current=next;
+    }
+    empty.hidden=next>=0;
+    caret.hidden=reduced||t>=total;
+    caret.style.opacity=String((t*2.4)%1<.78?1:.24);
+    const target=Math.max(0,(next+1)*lineHeight+13-viewport);
+    const dt=t-previousTime;
+    scroll=reduced||staticPass||t>=total||dt<0||dt>.3?target:scroll+(target-scroll)*(1-Math.exp(-dt*16));
+    previousTime=t;
+    host.style.setProperty('--code-y',`${-scroll.toFixed(2)}px`);
   }
   function paint(t){if(t<buildEnd)drawBuild(t);else drawFrame(t-buildEnd);showCode(t);}
   function advance(from){
@@ -156,7 +262,7 @@
     if(pref.matches){last=buildEnd+Math.min(motionLength,Math.max(0,scene.stillAt??motionLength*.75));paint(last);return;}
     last=0;paint(last);advance(0);
   }
-  window.addEventListener('resize',()=>{measure();showCode(last);});
+  window.addEventListener('resize',()=>{measure();staticPass=true;showCode(last);staticPass=false;});
   window.addEventListener('keydown',e=>{
     if(e.code!=='Space'||e.repeat||e.altKey||e.ctrlKey||e.metaKey||e.shiftKey||pref.matches)return;
     e.preventDefault();

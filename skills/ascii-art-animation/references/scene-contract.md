@@ -9,7 +9,7 @@ Define `const scene` with:
 - `lang`: document language, normally `ko` or `en`; `title` and `description`: scene name and accessible description; `bg`: canvas background color.
 - `duration`: requested motion duration in seconds (default 12, not counting the 5.16-second opening build); `stillAt`: optional representative motion time in seconds.
 - `layers`: ordered objects `{ fn, label, weight }`. Use background-to-foreground order, no more than 8 layers. `weight` is optional and positive; it controls how much of the opening build goes to this layer.
-- `motion`: `[time, layerFunction, label]` tuples starting at 0 with strictly increasing time, no later than `duration`. Each function must be in `layers`. Point each cue to the actual layer responsible for the effect at that time.
+- `motion`: `[time, layerFunction, label]` tuples starting at 0 with strictly increasing time, no later than `duration`. Each function must be in `layers`. Point each cue to the actual layer responsible for the effect at that time. The shell picks source excerpts from the named functions and reveals the actual characters; no separate display script is needed. Prefer readable line lengths and multiline function declarations.
 
 Example shape (not a scene to copy):
 
